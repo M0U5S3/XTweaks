@@ -1,86 +1,63 @@
 # Standard library imports
-from typing import Any, Dict, Type, Tuple
+from typing import Dict, Type, Tuple
 
 # Third-party imports
 import tkinter as tk
+from colorama import init
 
 # Local application imports
-from pages.question_editor_page import QuestionEditorPage
-from pages.home_page import Home
+from pages.question_editor.question_editor_page import QuestionEditorPage
+from utils.app_logging import DebugMode, LogLevel, IGNORE_MODULES
+from utils.app_logging._logger import _core_log
 
+IGNORE_MODULES.ignore(func_name='log')
 
 class AppController(tk.Tk):
-    """
-    Main application controller that allows pages to request root-level actions.
+    """Main application controller that allows pages to request root-level actions."""
 
-    Inherits from:
-        tk.Tk: The base class for Tkinter.
-
-    Class Attributes:
-        PAGES (Tuple[Type, ...]): A tuple containing the page classes used in the application.
-    """
-
-    # Define all pages
     PAGES: Tuple[Type, ...] = (QuestionEditorPage,)
 
     def __init__(
-            self,
-            home_page: Type[tk.Widget] = Home,
+        self,
+        launch_page: Type[tk.Widget],
+        debug_mode: DebugMode = DebugMode.OFF
     ) -> None:
-        """
-        Initialize the AppController, set up the main window, and initialize all pages.
-
-        Args:
-            home_page (Type[tk.Widget], optional): The default home page class to display.
-                Defaults to Home.
-        """
         super().__init__()
 
-        # Configure window properties.
-        self.title('ExamTweaks')
-        self.state('zoomed')  # Start the application in zoomed (maximized) state.
-        self.resizable(False, False)  # Disable window resizing.
+        self.debug_mode: DebugMode = debug_mode
 
-        # Retrieve screen dimensions.
+        # Window properties
+        self.title('ExamTweaks')
+        self.state('zoomed')
+        self.resizable(False, False)
+
         self.screen_width: int = self.winfo_screenwidth()
         self.screen_height: int = self.winfo_screenheight()
+        self.home_page: Type[tk.Widget] = launch_page
 
-        # Store the default home page class.
-        self.home_page: Type[tk.Widget] = home_page
-
-        # Create a container frame to hold all pages.
         container: tk.Frame = tk.Frame(self)
         container.pack(side="top", fill="both", expand=True)
-
-        # Configure the grid structure to allow expanding.
         container.grid_rowconfigure(0, weight=1)
         container.grid_columnconfigure(0, weight=1)
 
-        # Initialize a dictionary to store page instances.
         self.frames: Dict[Type, tk.Widget] = {}
 
-        # Instantiate each page and stack them in the same grid cell.
         for F in AppController.PAGES:
             frame: tk.Widget = F(parent=container, controller=self)
             self.frames[F] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
-        # Display the default home page.
         self.show_frame(self.home_page)
 
-    def show_frame(self, page_class: Type) -> None:
-        """
-        Bring the frame corresponding to the specified page class to the front.
+        self.log(LogLevel.INFO, "Initialised controller")
 
-        Args:
-            page_class (Type): The class of the page to be displayed.
-        """
+    def show_frame(self, page_class: Type) -> None:
         frame: tk.Widget = self.frames[page_class]
         frame.tkraise()
 
-    def run(self) -> None:
-        """
-        Start the Tkinter event loop.
-        """
-        self.mainloop()
+    def log(self, level: LogLevel, message: str, prioritize: bool = False) -> None:
+        # Wrap the logging module in the controller to pass it the debug mode attribute
+        _core_log(level, self.debug_mode, message, prioritize=prioritize)
 
+    def run(self) -> None:
+        self.mainloop()

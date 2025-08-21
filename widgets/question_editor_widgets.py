@@ -1,6 +1,6 @@
 # Standard library imports
 import io
-from typing import Any, Optional, TypedDict
+from typing import Callable, Optional, TypedDict
 
 # Third-party imports
 import tkinter as tk
@@ -8,6 +8,7 @@ from PIL import Image, ImageTk, UnidentifiedImageError
 
 # Local application imports
 from utils.image_tools import restricted_resize_image
+from utils.mask import Mask
 
 # Constants for image scaling
 MAX_RELATIVE_IMAGE_HEIGHT: float = 0.40  # Maximum image height as a fraction of the window's height
@@ -27,13 +28,14 @@ class QuestionCanvas(tk.Canvas):
             self,
             parent: tk.Widget,
             controller: tk.Tk,
-            question_image_binary: bytes
+            question_image_binary: bytes,
+            on_second_click: Callable[[Mask], None]
     ) -> None:
         """
         Initialize the QuestionCanvas widgets.
 
         Args:
-            parent (tk.Widget): The parent widgets in which the canvas will be embedded.
+            parent (tk.Widget): The parent widget in which the canvas will be embedded.
             controller (tk.Tk): Root app controller.
             question_image_binary (bytes): Binary data for the image to be displayed.
         """
@@ -41,6 +43,7 @@ class QuestionCanvas(tk.Canvas):
         # Parameter attributes
         self.parent: tk.Widget = parent
         self.controller: tk.Tk = controller
+        self.on_second_click = on_second_click
 
         self._last_click: Optional[tuple[int, int]] = None  # Stores each first click
         self._lasso_ids: Optional[LassoIds] = {
@@ -110,16 +113,20 @@ class QuestionCanvas(tk.Canvas):
             self._last_click = (event.x, event.y)
 
         else:
-            self.unbind(self._lasso_ids['handler_bind_id'])
+            self.unbind('<Motion>', self._lasso_ids['handler_bind_id'])
             self.delete(self._lasso_ids['rect_id'])
-            self.create_rectangle(
-                *self._last_click,
-                event.x,
-                event.y,
-                outline='blue',
+            mask = Mask(
+                self.create_rectangle(
+                    *self._last_click,
+                    event.x,
+                    event.y,
+                    outline='blue',
+                ),
+                self
             )
 
-            # todo create mask object and pass up to window
+            # Pass mask up to page
+            self.on_second_click(mask)
 
             self._lasso_ids['handler_bind_id'] = None
             self._lasso_ids['rect_id'] = None
@@ -132,6 +139,9 @@ class QuestionCanvas(tk.Canvas):
         Args:
             event (tk.Event): Event data containing the click's coordinates.
         """
+
+        if self._last_click is None:    # Guard against race conditions
+            return
 
         self.coords(
             self._lasso_ids['rect_id'],
@@ -221,6 +231,3 @@ class QuestionCanvas(tk.Canvas):
         """
         self._question_image_binary: bytes = binary
         self.render_image()
-
-    def release(self) -> None:
-        pass    # todo Reset the appropriate variables

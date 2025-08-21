@@ -13,7 +13,6 @@ class Variable:
     def __init__(
             self,
             variable_name: str,
-            crng_function: Callable[[], float],
             masks: Optional[list[Mask]] = None
     ) -> None:
         """
@@ -21,7 +20,6 @@ class Variable:
 
         Args:
             variable_name (str): A reference name for the variable in ResLang.
-            crng_function (Callable[[], float]): A function that returns a float to generate the variable's value.
             masks (Optional[list[Mask]]): A list of Mask objects specifying where numbers can be placed on the image.
                 If not provided, defaults to an empty list.
         """
@@ -30,7 +28,6 @@ class Variable:
         self._variable_name: str = variable_name
 
         # Public parameter attributes
-        self.crng_function: Callable[[], float] = crng_function
         self.masks: Optional[list[Mask]] = masks if masks is not None else []
 
     @property
