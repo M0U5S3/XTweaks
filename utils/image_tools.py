@@ -3,38 +3,25 @@ from PIL import Image
 def restricted_resize_image(
         image: Image.Image,
         target_width: int,
-        target_height: int,
-        priority: str = "height"
+        target_height: int
 ) -> Image.Image:
     """
-    Resize the image to fit within the target dimensions with respect to its original aspect ratio.
+    Resize the image to fully fit within the target dimensions while preserving its original aspect ratio.
+    The image is always scaled up or down to maximize use of the target box without exceeding it.
 
     Process:
         - Compute original aspect ratio
-        - If priority == "height":
-            • If target_height > orig_height, scale image up to match target_height and width according to the aspect ratio.
-            • Otherwise, keep original dimensions.
-            • If new_width > target_width (i.e. you’ve blown out the width),
-              clamp new_width to target_width and reduce height according to aspect ratio.
-        - If priority == "width":
-            • If target_width > orig_width, scale image up to match target_width and height according to the aspect ratio.
-            • Otherwise, keep original dimensions.
-            • If new_height > target_height (i.e. you’ve blown out the height),
-              clamp new_height to target_height and reduce width according to aspect ratio.
-        - Finally, call image.resize((new_width, new_height), Image.LANCZOS) and return.
+        - Scale image to match target height and compute corresponding width
+        - If resulting width exceeds target width, clamp width and recalculate height
+        - Resize the image using the final dimensions
 
     Args:
         image (Image.Image): The original PIL image.
         target_width (int): The maximum allowed width.
         target_height (int): The maximum allowed height.
-        priority (str, optional): Either "height" or "width", determining the scaling priority.
-                                  Defaults to "height".
 
     Returns:
-        Image.Image: The resized image.
-
-    Raises:
-        ValueError: If `priority` is not either "height" or "width".
+        Image.Image: The resized image that fits within the target box.
     """
 
     # Original dimensions and aspect ratio
@@ -42,37 +29,16 @@ def restricted_resize_image(
     orig_height: int
     orig_width, orig_height = image.size
 
-    new_height: int = orig_height
-    new_width: int = orig_width
-
     aspect_ratio: float = orig_width / orig_height
 
     # Calculate new dimensions before scaling
     # Scale by height
-    if priority == "height":
-        # Scale to meet the target height first.
-        if target_height > orig_height:
-            new_height: int = target_height
-            new_width: int = int(target_height * aspect_ratio)
+    new_height = target_height
+    new_width = int(target_height * aspect_ratio)
 
-        # If the width exceeds the target, scale down to meet target width.
-        if new_width > target_width:
-            new_width = target_width
-            new_height = int(target_width / aspect_ratio)
-
-    # Scale by width
-    elif priority == "width":
-        # Scale to meet the target width first.
-        if target_width > orig_width:
-            new_width: int = target_width
-            new_height: int = int(target_width / aspect_ratio)
-
-        # If the height exceeds the target, scale down to meet target height.
-        if new_height > target_height:
-            new_height = target_height
-            new_width = int(target_height * aspect_ratio)
-    else:
-        raise ValueError("priority must be either 'height' or 'width'.")
+    if new_width > target_width:
+        new_width = target_width
+        new_height = int(target_width / aspect_ratio)
 
     # Scale image by calculated dimensions
     return image.resize((new_width, new_height), Image.LANCZOS)

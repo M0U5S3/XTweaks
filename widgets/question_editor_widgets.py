@@ -11,8 +11,8 @@ from utils.image_tools import restricted_resize_image
 from utils.mask import Mask
 
 # Constants for image scaling
-MAX_RELATIVE_IMAGE_HEIGHT: float = 0.40  # Maximum image height as a fraction of the window's height
-MAX_RELATIVE_IMAGE_WIDTH: float = 0.80  # Maximum image width as a fraction of the window's width
+MAX_RELATIVE_IMAGE_HEIGHT: float = 0.20  # Maximum image height as a fraction of the window's height
+MAX_RELATIVE_IMAGE_WIDTH: float = 0.40  # Maximum image width as a fraction of the window's width
 
 
 class LassoIds(TypedDict):
@@ -28,7 +28,7 @@ class QuestionCanvas(tk.Canvas):
             self,
             parent: tk.Widget,
             controller: tk.Tk,
-            question_image_binary: bytes,
+            placeholder_image: bytes,
             on_second_click: Callable[[Mask], None]
     ) -> None:
         """
@@ -37,7 +37,7 @@ class QuestionCanvas(tk.Canvas):
         Args:
             parent (tk.Widget): The parent widget in which the canvas will be embedded.
             controller (tk.Tk): Root app controller.
-            question_image_binary (bytes): Binary data for the image to be displayed.
+            placeholder_image (bytes): Binary data for the image to be displayed.
         """
 
         # Parameter attributes
@@ -58,7 +58,7 @@ class QuestionCanvas(tk.Canvas):
             height=MAX_RELATIVE_IMAGE_HEIGHT * self.controller.screen_height
         )
 
-        # 1×1 transparent placeholder image
+        # Placeholder image
         self.tk_question_image = ImageTk.PhotoImage(
             Image.new(
                 'RGBA',
@@ -66,12 +66,12 @@ class QuestionCanvas(tk.Canvas):
                 (0, 0, 0, 0)
             )
         )
-        self.question_image_binary: bytes = question_image_binary
+        self.question_image_binary: bytes = placeholder_image
 
         # draw the placeholder so the attribute is “used” immediately
         self.create_image(0, 0, anchor='nw', image=self.tk_question_image)
 
-        # Create Tkinter StringVar objects to store the mouse X, Y coordinate display
+        # Position vars
         self.mouse_x: tk.StringVar = tk.StringVar(value='X: 0')
         self.mouse_y: tk.StringVar = tk.StringVar(value='Y: 0')
 
@@ -99,6 +99,9 @@ class QuestionCanvas(tk.Canvas):
         #     - Unbind the motion handler
         #     - Draw a solid rectangle from the stored start to (event.x, event.y)
         #     - Reset `_last_click`
+
+        if not self.parent.check_image():
+            return
 
         if self._last_click is None:
             self._lasso_ids['rect_id'] = self.create_rectangle(
@@ -181,7 +184,7 @@ class QuestionCanvas(tk.Canvas):
 
         except TypeError as e:
             # Not a bytes-like object
-            print(f"[render_image] invalid data type: {e}")
+            print(f"[render_image] invalid data type: {e}") # todo use log
             self.delete('all')
             return
 
