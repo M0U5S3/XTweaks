@@ -10,8 +10,6 @@ from utils.app_logging import LogLevel
 
 __all__ = ["style"]
 
-CONFIG_PATH = "data/config.json"
-
 
 class ControllerNotSetError(Exception):
     """Raised when the _StyleManager is used without a controller"""
@@ -25,20 +23,14 @@ def _requires_controller(method):
         return method(self, *args, **kwargs)
     return wrapper
 
-def _load_theme():
-    try:
-        with open(CONFIG_PATH, "r") as f:
-            return json.load(f).get("theme", "light")
-    except FileNotFoundError:
-        return "light"
-
 
 class _StyleManager:
     def __init__(self, size_multiplier: float = 1.0):
         self._controller = None
-        self._theme = _load_theme()
-        self._new_theme = self._theme
+        self._theme = None
+        self._new_theme = None
         self.size_multiplier = size_multiplier
+
         self._themes = {
             "light": {
                 "background": "#f0f4f8",
@@ -46,7 +38,9 @@ class _StyleManager:
                 "primary_dark": "#2980b9",
                 "text_main": "#2c3e50",
                 "text_secondary": "#34495e",
-                "button_text": "white"
+                "button_text": "white",
+                "back_button": "#B20F0F",
+                "back_button_dark": "#820A0A"
             },
             "dark": {
                 "background": "#1e1e2f",
@@ -54,9 +48,16 @@ class _StyleManager:
                 "primary_dark": "#8e44ad",
                 "text_main": "#ecf0f1",
                 "text_secondary": "#bdc3c7",
-                "button_text": "#ffffff"
+                "button_text": "#ffffff",
+                "back_button": "#B20F0F",
+                "back_button_dark": "#820A0A"
             }
         }
+
+    @_requires_controller
+    def _load_theme(self):
+        self._theme = self._controller.get_config("theme")
+        self._new_theme = self._theme
 
     @_requires_controller
     def _register_ttk_styles(self):
@@ -65,7 +66,7 @@ class _StyleManager:
         # Apply current theme
         style_engine.theme_use("clam")
 
-        colors = self._themes.get(self._theme, self._themes["light"])
+        colors = self.get_colors()
 
         # Label style
         style_engine.configure("Custom.TLabel",
@@ -91,8 +92,7 @@ class _StyleManager:
     def toggle_theme(self):
         """Switch between light and dark themes"""
         self._new_theme = "dark" if self._new_theme == "light" else "light"
-        with open(CONFIG_PATH, "w") as f:
-            json.dump({"theme": self._new_theme}, f)
+        self._controller.update_config("theme", self._new_theme)
         self._controller.log(LogLevel.INFO, f'Toggled theme to {self._new_theme}. Waiting to restart...')
 
     # Dictionaries are wrapped in a function to avoid premature initialization.
@@ -105,10 +105,25 @@ class _StyleManager:
             "default": font.Font(family="Helvetica", size=int(11 * self.size_multiplier))
         }
 
-    def get_button_style(self) -> Dict:
-        """Return button style of the selected theme"""
-        colors = self._themes.get(self._theme, self._themes["light"])
+    def get_button_style_home(self):
         return {
+            "font": self.get_fonts()['button'],
+            "bg": "#3498db",
+            "fg": "white",
+            "activebackground": "#2980b9",
+            "activeforeground": "white",
+            "width": 20,
+            "height": 2,
+            "bd": 0,
+            "relief": "flat",
+            "cursor": "hand2"
+        }
+
+    def get_button_style_question_editor(self) -> Dict:
+        """Return button style of the selected theme"""
+        colors = self.get_colors()
+        return {
+            "font": self.get_fonts()['button'],
             "bg": colors["primary"],
             "fg": colors["button_text"],
             "activebackground": colors["primary_dark"],
@@ -121,25 +136,25 @@ class _StyleManager:
         }
 
     def get_label_style(self) -> Dict:
-        colors = self._themes.get(self._theme, self._themes["light"])
+        colors = self.get_colors()
         return {
             "foreground": colors["text_main"],
             "background": colors["background"]
         }
 
     def get_frame_style(self) -> Dict:
-        colors = self._themes.get(self._theme, self._themes["light"])
+        colors = self.get_colors()
         return {
             "background": colors["background"]
         }
 
     def get_back_button_style(self) -> Dict:
         """Return style for a small back button in the top-left corner"""
-        colors = self._themes.get(self._theme, self._themes["light"])
+        colors = self.get_colors()
         return {
-            "bg": colors["background"],
+            "bg": colors["back_button"],
             "fg": colors["text_main"],
-            "activebackground": colors["primary_dark"],
+            "activebackground": colors["back_button_dark"],
             "activeforeground": colors["button_text"],
             "bd": 1,
             "relief": "solid",
@@ -151,13 +166,14 @@ class _StyleManager:
 
     def get_colors(self) -> Dict:
         """Return colours of the selected theme"""
-        return self._themes.get(self._theme, self._themes["light"])
+        return self._themes[self._theme]
 
     def set_controller(self, controller):
         """Attach the shared controller instance"""
         self._controller = controller
-        self._controller.log(LogLevel.INFO, f"Styler controller set. Ready.")
+        self._load_theme()
         self._register_ttk_styles()
+        self._controller.log(LogLevel.INFO, f"Styler controller set. {self._theme} theme selected.")
 
 # Shared instance
 style = _StyleManager()

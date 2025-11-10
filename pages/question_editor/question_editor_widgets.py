@@ -1,6 +1,6 @@
 # Standard library imports
 import io
-from typing import Callable, Optional, TypedDict
+from typing import Optional, TypedDict
 
 # Third-party imports
 import tkinter as tk
@@ -9,27 +9,26 @@ from PIL import Image, ImageTk, UnidentifiedImageError
 # Local application imports
 from utils.image_tools import restricted_resize_image
 from utils.mask import Mask
+from utils.app_logging import LogLevel
 
 # Constants for image scaling
-MAX_RELATIVE_IMAGE_HEIGHT: float = 0.20  # Maximum image height as a fraction of the window's height
-MAX_RELATIVE_IMAGE_WIDTH: float = 0.40  # Maximum image width as a fraction of the window's width
+MAX_RELATIVE_IMAGE_HEIGHT = 0.20  # Maximum image height as a fraction of the window's height
+MAX_RELATIVE_IMAGE_WIDTH = 0.40  # Maximum image width as a fraction of the window's width
 
 
+# Type definition
 class LassoIds(TypedDict):
     rect_id: Optional[int]
     handler_bind_id: Optional[str]
 
 class QuestionCanvas(tk.Canvas):
-    """
-    Canvas to hold image and handle events related to interacting with the image.
-    """
+    """Canvas to hold image and handle events related to interacting with the image."""
 
     def __init__(
             self,
             parent: tk.Widget,
             controller: tk.Tk,
-            placeholder_image: bytes,
-            on_second_click: Callable[[Mask], None]
+            placeholder_image: bytes
     ) -> None:
         """
         Initialize the QuestionCanvas widgets.
@@ -41,9 +40,8 @@ class QuestionCanvas(tk.Canvas):
         """
 
         # Parameter attributes
-        self.parent: tk.Widget = parent
-        self.controller: tk.Tk = controller
-        self.on_second_click = on_second_click
+        self.parent = parent
+        self.controller = controller
 
         self._last_click: Optional[tuple[int, int]] = None  # Stores each first click
         self._lasso_ids: Optional[LassoIds] = {
@@ -66,7 +64,7 @@ class QuestionCanvas(tk.Canvas):
                 (0, 0, 0, 0)
             )
         )
-        self.question_image_binary: bytes = placeholder_image
+        self.question_image_binary = placeholder_image
 
         # draw the placeholder so the attribute is “used” immediately
         self.create_image(0, 0, anchor='nw', image=self.tk_question_image)
@@ -79,31 +77,16 @@ class QuestionCanvas(tk.Canvas):
         self.bind('<Button-1>', self._canvas_click)
         self.bind('<Motion>', self._update_mouse_display)
 
-    def _canvas_click(self, event: tk.Event) -> None:
-        """
-        Handle left mouse button clicks on the canvas.
+    def _canvas_click(self, event) -> None:
+        """Handle left clicks on the canvas."""
 
-        On first click, begin a dashed “lasso” rectangle for selection.
-        On second click, finalize the rectangle, unbind the motion handler,
-        and hand off the region for masking elsewhere.
-
-        Args:
-            event (tk.Event): Event data containing the click's coordinates.
-        """
-
-        # Process:
-        # - If this is the first click (no existing `_last_click`), start drawing a lasso:
-        #     - Bind mouse motion to `_handle_lasso`
-        #     - Create dashed rectangle at (event.x, event.y)
-        # - If this is the second click, finish the lasso:
-        #     - Unbind the motion handler
-        #     - Draw a solid rectangle from the stored start to (event.x, event.y)
-        #     - Reset `_last_click`
-
-        if not self.parent.check_image():
+        # Make sure the canvas actually contains a question image.
+        if not self.parent.question_image_imported:
             return
 
+        # If this is the first click (no existing `_last_click`)
         if self._last_click is None:
+            # Create dashed rectangle at (event.x, event.y)
             self._lasso_ids['rect_id'] = self.create_rectangle(
                 event.x,
                 event.y,
@@ -112,12 +95,18 @@ class QuestionCanvas(tk.Canvas):
                 outline='blue',
                 dash=(2, 2),
             )
+
+            # Bind mouse motion to `_handle_lasso`
             self._lasso_ids['handler_bind_id'] = self.bind('<Motion>', self._handle_lasso, add='+')
             self._last_click = (event.x, event.y)
 
+        # If this is the second click, finish the lasso:
         else:
+            # Unbind the motion handler
             self.unbind('<Motion>', self._lasso_ids['handler_bind_id'])
             self.delete(self._lasso_ids['rect_id'])
+
+            # Draw a solid rectangle from the stored start to here
             mask = Mask(
                 self.create_rectangle(
                     *self._last_click,
@@ -129,18 +118,16 @@ class QuestionCanvas(tk.Canvas):
             )
 
             # Pass mask up to page
-            self.on_second_click(mask)
+            self.parent.on_second_click(mask)
 
+            # Reset everything
             self._lasso_ids['handler_bind_id'] = None
             self._lasso_ids['rect_id'] = None
             self._last_click = None
 
-    def _handle_lasso(self, event: tk.Event) -> None:
+    def _handle_lasso(self, event) -> None:
         """
         Update the dashed lasso rectangle as the mouse moves.
-
-        Args:
-            event (tk.Event): Event data containing the click's coordinates.
         """
 
         if self._last_click is None:    # Guard against race conditions
@@ -164,49 +151,38 @@ class QuestionCanvas(tk.Canvas):
         self.mouse_y.set(f'Y: {event.y}')
 
     def render_image(self) -> None:
-        """
-        Render and display the image from binary data onto the canvas.
-
-        Process:
-            - Use PIL to treat binary data as an image file.
-            - Calculate the max target dimensions based on screen size and scaling constants.
-            - Resizes the image using 'restricted_resize_image' to preserve aspect ratio.
-            - Updates the canvas size to math the image and renders the image.
-
-        Raises:
-            Exception: Raises any exception thrown during image processing.
-        """
+        """Render and display the image from binary data onto the canvas."""
         try:
-            # Wrap raw bytes in BytesIO and let PIL open it
-            orig_question_image: Image.Image = Image.open(
+            # Wrap binary in BytesIO and let PIL open it
+            orig_question_image = Image.open(
                 io.BytesIO(self._question_image_binary)
             )
 
         except TypeError as e:
             # Not a bytes-like object
-            print(f"[render_image] invalid data type: {e}") # todo use log
+            self.controller.log(LogLevel.ERROR, "[render_image] invalid data type: {e}")
             self.delete('all')
             return
 
         except UnidentifiedImageError as e:
-            # Valid buffer, but PIL can’t parse it
-            print(f"[render_image] could not decode image data: {e}")
+            # PIL can’t parse binary
+            self.controller.log(LogLevel.ERROR, f"[render_image] could not decode image data: {e}")
             self.delete('all')
             return
 
         # Calculate max target dimensions for the image
-        target_width: int = int(MAX_RELATIVE_IMAGE_WIDTH * self.controller.screen_width)
-        target_height: int = int(MAX_RELATIVE_IMAGE_HEIGHT * self.controller.screen_height)
+        target_width = int(MAX_RELATIVE_IMAGE_WIDTH * self.controller.screen_width)
+        target_height = int(MAX_RELATIVE_IMAGE_HEIGHT * self.controller.screen_height)
 
-        # Resize the image while preserving its aspect ratio
-        resized_image: Image.Image = restricted_resize_image(
+        # Resize the image
+        resized_image = restricted_resize_image(
             orig_question_image,
             target_width,
             target_height
         )
 
         # Convert the resized PIL image to a Tk image
-        self.tk_question_image: ImageTk.PhotoImage = ImageTk.PhotoImage(resized_image)
+        self.tk_question_image = ImageTk.PhotoImage(resized_image)
 
         # Update the canvas dimensions to match the image
         self.config(width=self.tk_question_image.width(), height=self.tk_question_image.height())
@@ -232,5 +208,5 @@ class QuestionCanvas(tk.Canvas):
         Args:
             binary (bytes): New binary data for the image.
         """
-        self._question_image_binary: bytes = binary
+        self._question_image_binary = binary
         self.render_image()

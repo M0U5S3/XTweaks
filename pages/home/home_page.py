@@ -5,6 +5,7 @@ from tkinter import font
 # Local application imports
 from utils.app_logging import LogLevel
 from utils.pages import Pages
+from utils.style import style
 
 
 class Home(tk.Frame):

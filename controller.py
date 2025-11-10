@@ -1,8 +1,11 @@
 # Standard library imports
 from typing import Dict, Type
+from pathlib import Path
+import json
 
 # Third-party imports
 import tkinter as tk
+from tkinter import filedialog, messagebox
 
 # Local application imports
 from utils.app_logging import DebugMode, LogLevel, IGNORE_MODULES
@@ -25,6 +28,10 @@ class AppController(tk.Tk):
         Pages.HOME: Home,
         Pages.QUESTION_EDITOR: QuestionEditorPage
     }
+
+    # Max character length for variable name input
+    MAX_VARIABLE_NAME_LENGTH = 20
+    CONFIG_PATH = "data/config.json"
 
     def __init__(
         self,
@@ -80,6 +87,56 @@ class AppController(tk.Tk):
 
         self.log(LogLevel.INFO, f"Page change {self.current_page} -> {page_name}")
         self.current_page = page_name
+
+    def get_crng_path(self):
+        """Open a file finder window to select a CRNG file"""
+        project_root = Path(__file__).resolve().parents[0]
+        crng_dir = project_root / "crng_files"  # Directory for crng files.
+
+        # In case the expected directory doesn't exist
+        if not crng_dir.is_dir():
+            messagebox.showwarning("Directory missing",
+                                   f"Directory not found: {crng_dir}\n")
+            self.log(LogLevel.ERROR, f"CRNG Directory not found at {crng_dir}")
+            return
+        else:
+            start_dir = str(crng_dir)
+
+        file_path = filedialog.askopenfilename(
+            title="Select CRNG Python File",
+            initialdir=start_dir,
+            filetypes=[("Python Files", "*.py")]
+        )
+
+        if not file_path:
+            return
+
+        chosen = Path(file_path).resolve()
+        try:
+            # Ensure the chosen file is inside crng_dir
+            chosen.relative_to(crng_dir)
+        except ValueError:
+            messagebox.showerror("Invalid selection",
+                                 f"Please choose a file from {crng_dir}.")
+            self.log(LogLevel.ERROR, f"Chosen file is not in the crng directory {crng_dir}")
+            return
+
+        # Return full path.
+        return Path(chosen)
+
+    def get_config(self, config):
+        with open(self.CONFIG_PATH, "r") as f:
+            return json.load(f)[config]
+
+    def update_config(self, config, value):
+        """Update a single config key with a new value."""
+        with open(self.CONFIG_PATH, "r") as f:
+            config_data = json.load(f)
+
+        config_data[config] = value
+
+        with open(self.CONFIG_PATH, "w") as f:
+            json.dump(config_data, f, indent=2)
 
     def log(self, level: LogLevel, message: str, prioritize: bool = False) -> None:
         # Wrap the logging module in the controller to pass it the debug mode attribute

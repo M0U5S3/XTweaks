@@ -1,3 +1,6 @@
 {
-  "theme": "light"
+  "theme": "light",
+
+  "max_variable_length": 20,
+  "allowed_variable_characters": "[A-Za-z0-9_]"
 }

@@ -11,13 +11,14 @@ from typing import Callable, Optional
 
 # Local application imports
 from pages.question_editor.create_variable_window import CreateVariableWindow
-from widgets.question_editor_widgets import QuestionCanvas
+from pages.question_editor.question_editor_widgets import QuestionCanvas
 from utils.mask import Mask
 from utils.variable import Variable
 from utils.app_logging import LogLevel
 from utils.dependency_manager import DependencyManager
 from utils.style import style
 from utils.pages import Pages
+from utils.question import Question
 
 
 class CRNGStatusLabel(ttk.Label):
@@ -36,9 +37,6 @@ class QuestionEditorPage(tk.Frame):
     Page for creating masks on the question image.
     """
 
-    # Max character length for variable name input
-    MAX_VARIABLE_NAME_LENGTH = 20
-
     def __init__(self, parent: tk.Widget, controller: tk.Tk, **kwargs):
         # === Page Setup ===
         super().__init__(parent, **kwargs)
@@ -53,7 +51,7 @@ class QuestionEditorPage(tk.Frame):
 
         # === Style Setup ===
         fonts = style.get_fonts()
-        button_style = style.get_button_style()
+        button_style = style.get_button_style_question_editor()
         label_style = style.get_label_style()
         frame_style = style.get_frame_style()
 
@@ -66,8 +64,7 @@ class QuestionEditorPage(tk.Frame):
         self.question_canvas = QuestionCanvas(
             self,
             controller,
-            question_image_binary,
-            self._on_second_click
+            question_image_binary
         )
 
         # -- Status & Coordinates --
@@ -92,7 +89,7 @@ class QuestionEditorPage(tk.Frame):
         import_crng_button = tk.Button(
             import_export_buttons,
             text="Import CRNG",
-            command=self._import_crng,
+            command=self._assign_crng_name,
             **button_style
         )
 
@@ -157,15 +154,12 @@ class QuestionEditorPage(tk.Frame):
             masks = masks if masks is not None else []
         )
 
-    def _on_second_click(self, mask: Mask):
-        self.controller.log(LogLevel.DEBUG, 'Second canvas click')
-
+    def on_second_click(self, mask: Mask):
         CreateVariableWindow(
             self,
             self.controller,
             mask,
-            self.add_variables,
-            self._variables,
+            self._variables
         )
 
     def _import_image(self):
@@ -180,45 +174,35 @@ class QuestionEditorPage(tk.Frame):
                 self.question_canvas.question_image_binary = f.read()
             self.question_image_imported = True
 
-    def _import_crng(self):
-        result = self.fetch_read_and_parse()
-        if result is None:
-            return
+    def _assign_crng_name(self):
+        self.crng_path = self.controller.get_crng_path()   # Open file finder.
+        self.controller.log(LogLevel.INFO, f"CRNG function successfully imported")
+        self.crng_status.mark_success()
 
-        file_path, parsed = result
-        required_modules = self._collect_required_modules(parsed)
+    # === LEGACY CODE ===
+
+    def _import_crng(self, crng_path):
+        required_modules = self._collect_required_modules(crng_path)
         dependency_manager = DependencyManager(self, self.controller, required_modules)
 
         if not dependency_manager.handle_missing_dependencies():
             return
 
-        module = self._import_module_from_path(file_path)
+        module = self._import_module_from_path(crng_path)
         if module is None:
             return
 
-        crng_function = self._get_function(module, file_path, 'crng')
+        crng_function = self._get_function(module, crng_path)
         if crng_function is None:
             return
 
-        if not self._validate_crng(crng_function):
-            return
-
         self.crng_function = crng_function
-        self.controller.log(LogLevel.INFO, f"'crng' function successfully imported", prioritize=True)
-        self.crng_status.mark_success()
+        self.controller.log(LogLevel.INFO, f"'crng' function successfully imported")
 
-    def fetch_read_and_parse(self):
-        file_path = filedialog.askopenfilename(
-            title="Select CRNG Python File",
-            filetypes=[("Python Files", "*.py")]
-        )
-
-        if not file_path:  # Handle nothing being selected
-            return
-
+    def _collect_required_modules(self, crng_path):
         # Read file as raw text
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(crng_path, "r", encoding="utf-8") as f:
                 source_code = f.read()
 
         except Exception as e:  # Handle any read issue
@@ -229,25 +213,10 @@ class QuestionEditorPage(tk.Frame):
         try:
             parsed = ast.parse(source_code)
 
-            # Iterate through each node.
-            # Check if each node is a function and called crng.
-            # Output True if any is True
-            has_crng = any(
-                isinstance(node, ast.FunctionDef) and node.name == "crng"
-                for node in parsed.body
-            )
-
-            if not has_crng:  # Handle failure to find the function.
-                self.controller.log(LogLevel.ERROR, "No function named 'crng' found in the selected file.")
-                return
-
         except SyntaxError as e:  # Handle any syntax errors while parsing.
             self.controller.log(LogLevel.ERROR, f"Syntax error while parsing file: {e}")
             return
 
-        return file_path, parsed
-
-    def _collect_required_modules(self, parsed):
         # Check for missing dependencies.
         required_modules = set()
 
@@ -262,86 +231,94 @@ class QuestionEditorPage(tk.Frame):
 
         return required_modules
 
-    def _import_module_from_path(self, file_path):
-        # Dynamically import module
-        try:
-            # Retrieve file name.
-            module_name = os.path.splitext(os.path.basename(file_path))[0]
+    @staticmethod
+    def _import_module_from_path(file_path):
+        # Retrieve file name.
+        module_name = os.path.splitext(os.path.basename(file_path))[0]
 
-            # Prepare and execute the module.
-            spec = importlib.util.spec_from_file_location(module_name, file_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            return module
+        # Prepare and execute the module.
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
 
-        except Exception as e:  # Handle any exceptions.
-            self.controller.log(LogLevel.ERROR, f"Failed to import module: {e}")
-            return None
+    def _get_function(self, module, file_path):
+        """Discovers exactly one @question-decorated function in a module."""
+        # Scan for functions flagged by the decorator
+        flagged = [
+            fn for _, fn in inspect.getmembers(module, inspect.isfunction)
+            if getattr(fn, "_is_question", False)
+        ]
 
-    def _get_function(self, module, file_path, function_name):
-        # Validate function
-        try:
-            crng_function = getattr(module, function_name)
-            self.controller.log(LogLevel.INFO, f"'{function_name}' function successfully found in {file_path}")
-            return crng_function
-
-        except AttributeError:  # crng might've somehow disappeared even after first checks.
-            self.controller.log(LogLevel.ERROR, f"Function '{function_name}' not found.")
-            return None
-
-    def _validate_crng(self, crng_function: Callable):
-        # Check the function behaves as it should
-        sig = inspect.signature(crng_function)
-        if len(sig.parameters) != 0:
+        # No flagged function.
+        if not flagged:
             self.controller.log(
                 LogLevel.ERROR,
-                f"Function '{crng_function.__name__}' should take 0 parameters, but takes {len(sig.parameters)}."
+                f"No @question function found in {file_path}"
             )
-            return False
-
-        # todo check that the dictionary keys also fit the variable name regex
-        # Check the function returns a dictionary
-        try:
-            result = crng_function()
-            if not isinstance(result, dict):
-                self.controller.log(
-                    LogLevel.ERROR,
-                    f"Function '{crng_function.__name__}' should return a dictionary,"
-                    f"but returned {type(result).__name__}."
-                )
-                return False
-
-        except Exception as e:
-            self.controller.log(
-                LogLevel.ERROR,
-                f"Function '{crng_function.__name__}' raised an exception when called: {e}"
-            )
-            return False
-
-        return True
-
-    def _export_question(self):
-        valid = self._validate_question()
-
-        if not valid:
-            self.controller.log(LogLevel.ERROR, "Question export failed validation.")
             return
 
+        # More than one flagged function.
+        if len(flagged) > 1:
+            names = [fn.__name__ for fn in flagged]
+            self.controller.log(
+                LogLevel.ERROR,
+                f"Multiple @question functions in {file_path}: {names}"
+            )
+            return
+
+        # Exactly one flagged function
+        fn = flagged[0]
+        self.controller.log(
+            LogLevel.INFO,
+            f"Discovered '{fn.__name__}' in {file_path}"
+        )
+        return fn
+
+    # === LEGACY CODE END ===
+
+    def _export_question(self):
+        self.controller.log(LogLevel.INFO, "Attempting an export...")
+
+        if not self.question_image_imported:
+            self.controller.log(LogLevel.WARN, "Question image not imported.")
+            return
+
+        if not self.crng_status.crng_imported:
+            self.controller.log(LogLevel.WARN, "CRNG not imported.")
+            return
+
+        # todo check that all variables have a link to CRNG.
+        # todo check solutions exist
+
         # Confirm export
+        # todo change to be a window with inputs: difficulty, exam board, calculator allowed and marks
+        calculator_allowed = True # todo all temporary
+        difficulty = 'Hard'
+        question_number = 7
+        exam_board = 'AQA'
+        year = 2020
+        month = 5
+
         if messagebox.askyesno(
                 "Confirm Export",
                 "Are you ready to export this question?"
         ):
             self.controller.log(LogLevel.INFO, "Question export confirmed.")
-            # todo Add actual export logic here
+
+            q = Question(
+                self.crng_path,
+                self.question_canvas.question_image_binary,
+                self.variables,
+                calculator_allowed,
+                difficulty,
+                question_number = question_number,
+                exam_board = exam_board,
+                year = year,
+                month = month
+            )
+
+            q.export()
 
         else:
             self.controller.log(LogLevel.INFO, "Question export cancelled.")
-
-    def _validate_question(self):
-        pass    # todo
-
-    def check_image(self):
-        if self.question_image_imported:
-            return True
-        return False
