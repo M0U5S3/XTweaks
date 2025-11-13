@@ -7,6 +7,7 @@ import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
+from pages.question_viewer.question_viewer_page import QuestionViewerPage
 # Local application imports
 from utils.app_logging import DebugMode, LogLevel, IGNORE_MODULES
 from utils.app_logging._logger import _core_log
@@ -26,7 +27,8 @@ class AppController(tk.Tk):
 
     PAGES: Dict[str, Type[tk.Frame]] = {
         Pages.HOME: Home,
-        Pages.QUESTION_EDITOR: QuestionEditorPage
+        Pages.QUESTION_EDITOR: QuestionEditorPage,
+        Pages.QUESTION_VIEWER: QuestionViewerPage
     }
 
     # Max character length for variable name input
@@ -36,11 +38,15 @@ class AppController(tk.Tk):
     def __init__(
         self,
         launch_page: PAGES,
+        crng_dir: Path | str,
         debug_mode: DebugMode = DebugMode.OFF
     ) -> None:
         super().__init__()
 
         self.debug_mode: DebugMode = debug_mode
+
+        # Directory for crng files.
+        self.crng_dir = crng_dir
 
         style.set_controller(self)
 
@@ -90,17 +96,15 @@ class AppController(tk.Tk):
 
     def get_crng_path(self):
         """Open a file finder window to select a CRNG file"""
-        project_root = Path(__file__).resolve().parents[0]
-        crng_dir = project_root / "crng_files"  # Directory for crng files.
 
         # In case the expected directory doesn't exist
-        if not crng_dir.is_dir():
+        if not self.crng_dir.is_dir():
             messagebox.showwarning("Directory missing",
-                                   f"Directory not found: {crng_dir}\n")
-            self.log(LogLevel.ERROR, f"CRNG Directory not found at {crng_dir}")
+                                   f"Directory not found: {self.crng_dir}\n")
+            self.log(LogLevel.ERROR, f"CRNG Directory not found at {self.crng_dir}")
             return
         else:
-            start_dir = str(crng_dir)
+            start_dir = str(self.crng_dir)
 
         file_path = filedialog.askopenfilename(
             title="Select CRNG Python File",
@@ -114,11 +118,11 @@ class AppController(tk.Tk):
         chosen = Path(file_path).resolve()
         try:
             # Ensure the chosen file is inside crng_dir
-            chosen.relative_to(crng_dir)
+            chosen.relative_to(self.crng_dir)
         except ValueError:
             messagebox.showerror("Invalid selection",
-                                 f"Please choose a file from {crng_dir}.")
-            self.log(LogLevel.ERROR, f"Chosen file is not in the crng directory {crng_dir}")
+                                 f"Please choose a file from {self.crng_dir}.")
+            self.log(LogLevel.ERROR, f"Chosen file is not in the crng directory {self.crng_dir}")
             return
 
         # Return full path.

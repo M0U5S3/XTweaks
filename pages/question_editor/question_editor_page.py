@@ -11,7 +11,7 @@ from typing import Callable, Optional
 
 # Local application imports
 from pages.question_editor.create_variable_window import CreateVariableWindow
-from pages.question_editor.question_editor_widgets import QuestionCanvas
+from pages.question_editor.question_editor_widgets import QuestionEditorCanvas
 from utils.mask import Mask
 from utils.variable import Variable
 from utils.app_logging import LogLevel
@@ -43,9 +43,6 @@ class QuestionEditorPage(tk.Frame):
         self.parent = parent
         self.controller = controller
 
-        with open("data/placeholder_image.jpeg", "rb") as f:
-            question_image_binary = f.read()
-
         self.question_image_imported = False
         self._variables: dict[str: Variable] = {}
 
@@ -61,10 +58,11 @@ class QuestionEditorPage(tk.Frame):
         header = ttk.Label(self, text="Question Editor", font=fonts["title"], **label_style)
 
         # -- Canvas --
-        self.question_canvas = QuestionCanvas(
+        self.question_canvas = QuestionEditorCanvas(
             self,
             controller,
-            question_image_binary
+            int(self.controller.screen_width * 0.4),
+            int(self.controller.screen_height * 0.2)
         )
 
         # -- Status & Coordinates --
@@ -175,107 +173,9 @@ class QuestionEditorPage(tk.Frame):
             self.question_image_imported = True
 
     def _assign_crng_name(self):
-        self.crng_path = self.controller.get_crng_path()   # Open file finder.
+        self.crng_name = self.controller.get_crng_path().name   # Open file finder.
         self.controller.log(LogLevel.INFO, f"CRNG function successfully imported")
         self.crng_status.mark_success()
-
-    # === LEGACY CODE ===
-
-    def _import_crng(self, crng_path):
-        required_modules = self._collect_required_modules(crng_path)
-        dependency_manager = DependencyManager(self, self.controller, required_modules)
-
-        if not dependency_manager.handle_missing_dependencies():
-            return
-
-        module = self._import_module_from_path(crng_path)
-        if module is None:
-            return
-
-        crng_function = self._get_function(module, crng_path)
-        if crng_function is None:
-            return
-
-        self.crng_function = crng_function
-        self.controller.log(LogLevel.INFO, f"'crng' function successfully imported")
-
-    def _collect_required_modules(self, crng_path):
-        # Read file as raw text
-        try:
-            with open(crng_path, "r", encoding="utf-8") as f:
-                source_code = f.read()
-
-        except Exception as e:  # Handle any read issue
-            self.controller.log(LogLevel.ERROR, f"Failed to read file: {e}")
-            return
-
-        # Parse and validate 'crng' function
-        try:
-            parsed = ast.parse(source_code)
-
-        except SyntaxError as e:  # Handle any syntax errors while parsing.
-            self.controller.log(LogLevel.ERROR, f"Syntax error while parsing file: {e}")
-            return
-
-        # Check for missing dependencies.
-        required_modules = set()
-
-        # Traverse syntax tree depth first so we don't miss nested imports.
-        for node in ast.walk(parsed):
-            # Check if the node is any kind of import
-            if isinstance(node, ast.Import):
-                required_modules.update(alias.name.split('.')[0] for alias in node.names)
-
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                required_modules.add(node.module.split('.')[0])
-
-        return required_modules
-
-    @staticmethod
-    def _import_module_from_path(file_path):
-        # Retrieve file name.
-        module_name = os.path.splitext(os.path.basename(file_path))[0]
-
-        # Prepare and execute the module.
-        spec = importlib.util.spec_from_file_location(module_name, file_path)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-
-    def _get_function(self, module, file_path):
-        """Discovers exactly one @question-decorated function in a module."""
-        # Scan for functions flagged by the decorator
-        flagged = [
-            fn for _, fn in inspect.getmembers(module, inspect.isfunction)
-            if getattr(fn, "_is_question", False)
-        ]
-
-        # No flagged function.
-        if not flagged:
-            self.controller.log(
-                LogLevel.ERROR,
-                f"No @question function found in {file_path}"
-            )
-            return
-
-        # More than one flagged function.
-        if len(flagged) > 1:
-            names = [fn.__name__ for fn in flagged]
-            self.controller.log(
-                LogLevel.ERROR,
-                f"Multiple @question functions in {file_path}: {names}"
-            )
-            return
-
-        # Exactly one flagged function
-        fn = flagged[0]
-        self.controller.log(
-            LogLevel.INFO,
-            f"Discovered '{fn.__name__}' in {file_path}"
-        )
-        return fn
-
-    # === LEGACY CODE END ===
 
     def _export_question(self):
         self.controller.log(LogLevel.INFO, "Attempting an export...")
@@ -307,7 +207,7 @@ class QuestionEditorPage(tk.Frame):
             self.controller.log(LogLevel.INFO, "Question export confirmed.")
 
             q = Question(
-                self.crng_path,
+                self.crng_name,
                 self.question_canvas.question_image_binary,
                 self.variables,
                 calculator_allowed,

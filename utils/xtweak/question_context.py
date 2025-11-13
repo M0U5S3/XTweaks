@@ -17,6 +17,12 @@ class QuestionContext:
         """Returns a dictionary of solutions"""
         return self._solutions
 
+    @property
+    def workings(self):
+        """Yields a list of workings"""
+        for working in self._workings:
+            yield working
+
     def variable(self, name: str, value: int or float) -> str:
         """Create a new variable and return an identifier"""
         self._variables[name] = value

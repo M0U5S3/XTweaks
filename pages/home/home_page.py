@@ -44,7 +44,7 @@ class Home(tk.Frame):
 
         # Buttons
         self.create_button("🧠 Question Tweaker", self.go_to_tweaker, **button_style)
-        self.create_button("📡 Host Session", self.go_to_host, **button_style)
+        self.create_button("📡 Open Questions", self.go_to_viewer, **button_style)
         self.create_button("🔗 Join Session", self.go_to_join, **button_style)
         self.create_button("📘 Offline Mode", self.go_to_offline, **button_style)
 
@@ -57,8 +57,8 @@ class Home(tk.Frame):
         self.controller.show_page(Pages.QUESTION_EDITOR)
         # todo all of below
 
-    def go_to_host(self):
-        pass
+    def go_to_viewer(self):
+        self.controller.show_page(Pages.QUESTION_VIEWER)
 
     def go_to_join(self):
         pass

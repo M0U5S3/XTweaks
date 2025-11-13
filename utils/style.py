@@ -102,6 +102,7 @@ class _StyleManager:
             "title": font.Font(family="Helvetica", size=int(24 * self.size_multiplier), weight="bold"),
             "subtitle": font.Font(family="Helvetica", size=int(14 * self.size_multiplier)),
             "button": font.Font(family="Helvetica", size=int(12 * self.size_multiplier)),
+            "math": font.Font(family="Arial", size=int(12 * self.size_multiplier)),
             "default": font.Font(family="Helvetica", size=int(11 * self.size_multiplier))
         }
 
