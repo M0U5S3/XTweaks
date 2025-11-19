@@ -1,5 +1,5 @@
 # Standard library imports
-from typing import Optional, Callable
+from typing import Optional
 
 # Local application imports
 from utils.mask import Mask
@@ -39,14 +39,6 @@ class Variable:
         self.variable_name = variable_name
 
     @property
-    def crng_function(self):
-        return self._crng_function
-
-    @crng_function.setter
-    def crng_function(self, crng_function):
-        self._crng_function = crng_function
-
-    @property
     def masks(self):
         return self._masks
 
@@ -73,3 +65,10 @@ class Variable:
         """
 
         self._masks.remove(mask)
+
+    def new_canvas_masks(self, canvas, ctx, **kwargs):
+        number = ctx.variables[self._variable_name]
+
+        for n, mask in enumerate(self.masks):
+            self.masks[n] = Mask(*mask.translate_absolute_coordinates(canvas), canvas, **kwargs)
+            self.masks[n].place_text(canvas, str(number))

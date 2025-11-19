@@ -10,17 +10,14 @@ from utils.parse_question import QuestionReader
 from utils.style import style
 from utils.pages import Pages
 from utils.image_canvas import ImageCanvas
-from utils.app_logging import LogLevel
 from utils.question import Question
-from utils.xtweak import QuestionContext, question
+from utils.xtweak import QuestionContext
 
 
 class QuestionViewerPage(tk.Frame):
     """
     Page for opening a question file.
     """
-
-    MAX_SOLUTIONS = 5
 
     def __init__(self, parent: tk.Widget, controller: tk.Tk, **kwargs):
         # === Page Setup ===
@@ -75,40 +72,84 @@ class QuestionViewerPage(tk.Frame):
         main_frame = tk.Frame(self, **frame_style)
         main_frame.pack(fill="both", expand=True, padx=20, pady=10)
 
+        # Two equal sized columns.
+        main_frame.grid_rowconfigure(0, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1, uniform="half")
+        main_frame.grid_columnconfigure(1, weight=1, uniform="half")
+
         # --- Question Frame ---
         question_frame = tk.Frame(main_frame)
-        question_frame.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        question_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10), pady=0)
 
-        # todo add optional question prompt and put it here.
+        # Prompt, Canvas, Info.
+        question_frame.grid_rowconfigure(0, weight=0)
+        question_frame.grid_rowconfigure(1, weight=1)
+        question_frame.grid_rowconfigure(2, weight=0)
+        question_frame.grid_columnconfigure(0, weight=1)
+
+        # --- Question Prompt ---
+        self.question_prompt = tk.StringVar(value='No Question Loaded')
+        question_prompt_label = ttk.Label(
+            question_frame,
+            textvariable=self.question_prompt,
+            font=fonts["default"],
+            **label_style
+        )
+        question_prompt_label.grid(row=0, column=0, sticky="nw", padx=4, pady=(6, 6))
 
         # --- Image Canvas ---
         self.question_canvas = ImageCanvas(
             question_frame,
             self.controller,
-            int(self.controller.screen_width * 0.5),
-            int(self.controller.screen_height * 0.8)
+            width=700,
+            height=700  # todo expand to fit frame
         )
-
-        self.question_canvas.pack()
+        self.question_canvas.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
 
         # --- Question Information ---
         self.question_info = tk.StringVar(value='No Question Loaded')
-        question_info_label= ttk.Label(question_frame, textvariable=self.question_info, font=fonts["default"],
-                                       **label_style)
-
-        question_info_label.pack()
+        question_info_label = ttk.Label(
+            question_frame,
+            textvariable=self.question_info,
+            font=fonts["default"],
+            **label_style
+        )
+        question_info_label.grid(row=2, column=0, sticky="sw", padx=4, pady=(6, 6))
 
         # --- Controls Frame ---
         controls_frame = tk.Frame(main_frame)
-        controls_frame.pack(side="right", fill="y")
+        controls_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0), pady=0)
 
         # --- Solutions Title ---
         solutions_frame_label = tk.Label(controls_frame, text="Solutions", font=fonts["subtitle"], **label_style)
         solutions_frame_label.pack(anchor="w", pady=(0, 5))
 
         # --- Solutions Frame ---
-        self.solutions_frame = tk.Frame(controls_frame, **frame_style)
-        self.solutions_frame.pack(anchor="n", pady=(0, 10))
+        # Use a frame with a canvas + scrollbar, keep a flexible width so right pane fills half
+        solutions_container = tk.Frame(controls_frame)
+        solutions_container.pack(fill="both", expand=True)
+
+        solutions_canvas = tk.Canvas(solutions_container, borderwidth=0, highlightthickness=0)
+        solutions_scroll = ttk.Scrollbar(solutions_container, orient="vertical", command=solutions_canvas.yview)
+        solutions_canvas.configure(yscrollcommand=solutions_scroll.set)
+
+        # place canvas and scrollbar
+        solutions_canvas.pack(side="left", fill="both", expand=True)
+        solutions_scroll.pack(side="right", fill="y")
+
+        self.solutions_frame = tk.Frame(solutions_canvas, **frame_style)
+        self.solutions_window = solutions_canvas.create_window((0, 0), window=self.solutions_frame, anchor="nw")
+
+        def _on_frame_configure(event):
+            solutions_canvas.configure(scrollregion=solutions_canvas.bbox("all"))
+
+        def _on_canvas_configure(event):
+            # make the inner frame match the canvas width
+            canvas_width = event.width
+            solutions_canvas.itemconfig(self.solutions_window, width=canvas_width)
+
+        self.solutions_frame.bind("<Configure>", _on_frame_configure)
+        solutions_canvas.bind("<Configure>", _on_canvas_configure)
 
         # --- Buttons Frame ---
         buttons_row = tk.Frame(controls_frame)
@@ -159,10 +200,17 @@ class QuestionViewerPage(tk.Frame):
         load_button.pack(side="right", padx=20)
 
     def check_solution(self):
-        # Set each question to either be correct or incorrect.
-        for name, solution in zip(self.current_ctx.solutions, self.current_ctx.solutions.values()):
-            self.correct_solutions[name] = self.solution_entries[name][1].get() == solution
-            # todo show correct answer next to entry
+        # Cycle through variable names and correct answers.
+        for name, solution in self.current_ctx.solutions.items():
+            entered = self.solution_entries[name][1].get().strip()
+            expected = str(solution)
+            is_correct = entered == expected
+
+            self.correct_solutions[name] = is_correct
+
+            # Update answer feedback.
+            color = 'green' if is_correct else 'red'
+            self.solution_entries[name][2].config(fg=color)
 
         # Show the workings to the student.
         self.show_workings()
@@ -176,7 +224,7 @@ class QuestionViewerPage(tk.Frame):
         # todo add database call.
         # todo force an import before page opens.
         self.reader.question_paths = [
-            'C:/Users/dariu/Downloads/AQA_7_2020_5_(2).xtweak'
+            'C:/Users/dariu/Downloads/AQA_7_2020_5.xtweak'
         ]
         # self.controller.open_questiondb or something return a list of paths. Only ".xtweak" files.
 
@@ -213,6 +261,9 @@ class QuestionViewerPage(tk.Frame):
         # Create a ctx instance
         self.current_ctx = self.current_question['crng_function']()
 
+        # Load dynamic question prompt
+        self.question_prompt.set(self.current_ctx.question_text)
+
         # Change the GUI to accommodate a potentially new number of solutions.
         self.configure_solutions_input()
 
@@ -241,14 +292,16 @@ class QuestionViewerPage(tk.Frame):
             ent.pack(side="left", padx=(5, 0))
 
             # Store references
-            self.solution_entries[key] = [row_frame, var]
+            self.solution_entries[key] = [row_frame, var, lbl]
 
     def place_masks(self):
-        # Reset the canvas first
-        pass
+        variables = self.current_question['question_data'].variables
+
+        for var_name in variables:
+            variables[var_name].new_canvas_masks(self.question_canvas, self.current_ctx, fill='white')
 
     def initialize_solutions(self):
-        # Loop through each entry and delete it's frame.
+        # Loop through each entry and delete its frame.
         for data in self.solution_entries.values():
             data[0].destroy()
 

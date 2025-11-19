@@ -7,6 +7,8 @@ class QuestionContext:
         self._solutions = {}
         self._workings = []
 
+        self._question_text = ()
+
     @property
     def variables(self) -> Dict:
         """Returns a dictionary of variables"""
@@ -23,6 +25,11 @@ class QuestionContext:
         for working in self._workings:
             yield working
 
+    @property
+    def question_text(self):
+        """Returns text to display under the question"""
+        return self._question_text
+
     def variable(self, name: str, value: int or float) -> str:
         """Create a new variable and return an identifier"""
         self._variables[name] = value
@@ -36,3 +43,8 @@ class QuestionContext:
     def output_workings(self, workings: str) -> None:
         """Print out a new line of working"""
         self._workings.append(workings)
+
+    @question_text.setter
+    def question_text(self, text: str):
+        """Optional text to display under the question"""
+        self._question_text = text

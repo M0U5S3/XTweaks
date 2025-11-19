@@ -18,7 +18,8 @@ class ImageCanvas(tk.Canvas):
             parent: tk.Widget,
             controller: tk.Tk,
             width: int,
-            height: int
+            height: int,
+            **kwargs
     ) -> None:
         """
         Initialize the QuestionCanvas widgets.
@@ -33,6 +34,9 @@ class ImageCanvas(tk.Canvas):
         self.parent = parent
         self.controller = controller
 
+        self.max_width = width
+        self.max_height = height
+
         self.width = width
         self.height = height
 
@@ -40,7 +44,10 @@ class ImageCanvas(tk.Canvas):
         super().__init__(
             self.parent,
             width=width,
-            height=height
+            height=height,
+            borderwidth=0,
+            highlightthickness=0,
+            **kwargs
         )
 
         # Placeholder image
@@ -78,15 +85,17 @@ class ImageCanvas(tk.Canvas):
         # Resize the image
         resized_image = restricted_resize_image(
             orig_question_image,
-            self.width,
-            self.height
+            self.max_width,
+            self.max_height
         )
 
         # Convert the resized PIL image to a Tk image
         self.tk_question_image = ImageTk.PhotoImage(resized_image)
 
+        self.width, self.height = self.tk_question_image.width(), self.tk_question_image.height()
+
         # Update the canvas dimensions to match the image
-        self.config(width=self.tk_question_image.width(), height=self.tk_question_image.height())
+        self.config(width=self.width, height=self.height)
 
         # Display the image on the canvas
         self.create_image(0, 0, anchor='nw', image=self.tk_question_image)

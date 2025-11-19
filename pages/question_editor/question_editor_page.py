@@ -1,8 +1,4 @@
 # Standard Library Imports
-import ast
-import importlib.util
-import os
-import inspect
 
 # Third-party imports
 import tkinter as tk
@@ -15,7 +11,6 @@ from pages.question_editor.question_editor_widgets import QuestionEditorCanvas
 from utils.mask import Mask
 from utils.variable import Variable
 from utils.app_logging import LogLevel
-from utils.dependency_manager import DependencyManager
 from utils.style import style
 from utils.pages import Pages
 from utils.question import Question
@@ -129,28 +124,6 @@ class QuestionEditorPage(tk.Frame):
     @property
     def variables(self):
         return self._variables
-
-    def add_variables(
-            self,
-            variable_name: str,
-            crng: Callable[[], float],
-            masks: Optional[list[Mask,...]] = None
-    ) -> None:
-        """
-        Add a new Variable instance to the variables list.
-
-        Args:
-            variable_name (str): The name to assign to the new variable.
-            crng (Callable[[], float]): A function that returns a float, used for generating random values or distributions.
-            masks (list[Mask], optional): A list of Mask objects associated with the variable. Defaults to an empty list.
-        """
-
-        # Add to variables list and pass an empty list if no masks are passed
-        self._variables[variable_name] = Variable(
-            variable_name,
-            crng,
-            masks = masks if masks is not None else []
-        )
 
     def on_second_click(self, mask: Mask):
         CreateVariableWindow(

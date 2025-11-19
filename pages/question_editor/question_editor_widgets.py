@@ -89,14 +89,16 @@ class QuestionEditorCanvas(ImageCanvas):
 
             # Draw a solid rectangle from the stored start to here
             mask = Mask(
-                self.create_rectangle(
-                    *self._last_click,
-                    event.x,
-                    event.y,
-                    outline='blue',
-                ),
-                self
+                *self._last_click,
+                event.x,
+                event.y,
+                self,
+                outline='blue'
             )
+
+            # DEBUG
+            print(f'old dimensions: {self.width}, {self.height}')
+            print(f'old rect: {self._last_click[0]}, {self._last_click[1]}, {event.x}, {event.y}')
 
             # Pass mask up to page
             self.parent.on_second_click(mask)

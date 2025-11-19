@@ -214,4 +214,4 @@ class CreateVariableWindow(tk.Toplevel):
 
     def _on_destruction(self, event):
         if not self._intentional_close:
-            self.mask.delete_rectangle()
+            self.mask.delete_rectangle(self.parent.question_canvas)
