@@ -7,7 +7,6 @@ import json
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-from pages.question_viewer.question_viewer_page import QuestionViewerPage
 # Local application imports
 from utils.app_logging import DebugMode, LogLevel, IGNORE_MODULES
 from utils.app_logging._logger import _core_log
@@ -17,6 +16,7 @@ from utils.pages import Pages
 # Pages
 from pages.home.home_page import Home
 from pages.question_editor.question_editor_page import QuestionEditorPage
+from pages.question_viewer.question_viewer_page import QuestionViewerPage
 
 # Ignore the log wrapper in verbose traceback
 IGNORE_MODULES.ignore(func_name='log')
@@ -31,8 +31,6 @@ class AppController(tk.Tk):
         Pages.QUESTION_VIEWER: QuestionViewerPage
     }
 
-    # Max character length for variable name input
-    MAX_VARIABLE_NAME_LENGTH = 20
     CONFIG_PATH = "data/config.json"
 
     def __init__(
@@ -43,6 +41,7 @@ class AppController(tk.Tk):
     ) -> None:
         super().__init__()
 
+        # Debug mode Off, On, Verbose
         self.debug_mode: DebugMode = debug_mode
 
         # Directory for crng files.
@@ -55,8 +54,6 @@ class AppController(tk.Tk):
         self.state('zoomed')
         self.resizable(False, False)
 
-        self.screen_width: int = self.winfo_screenwidth()
-        self.screen_height: int = self.winfo_screenheight()
         self.launch_page: str = launch_page
 
         self.container: tk.Frame = tk.Frame(self)
@@ -64,6 +61,7 @@ class AppController(tk.Tk):
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
+        # Loaded pages
         self.frames: Dict[str, tk.Frame] = {}
 
         self.current_page = self.launch_page
@@ -74,7 +72,7 @@ class AppController(tk.Tk):
     def initialize_page(self, page: Pages):
         frame: tk.Frame = self.__class__.PAGES[page](parent=self.container, controller=self)
 
-        # If frame has already been opened and reset is on, reset it
+        # If frame has already been opened, reset it
         if page in self.frames:
             self.frames[page].destroy()
 
@@ -82,14 +80,16 @@ class AppController(tk.Tk):
         frame.grid(row=0, column=0, sticky="nsew")
 
     def show_page(self, page_name: Pages, reset: bool = True) -> None:
+        # If the page doesn't exist.
         if page_name not in self.__class__.PAGES:
             raise ValueError(f"Page '{page_name}' is not registered in {self.__class__.__name__}.PAGES")
 
+        # Initialize a page if it hasn't been created yet or if reset is True.
         if reset or page_name not in self.frames:
             self.initialize_page(page_name)
 
-        new_frame: tk.Frame = self.frames[page_name]
-        new_frame.tkraise()
+        # Raise the frame.
+        self.frames[page_name].tkraise()
 
         self.log(LogLevel.INFO, f"Page change {self.current_page} -> {page_name}")
         self.current_page = page_name
@@ -127,6 +127,15 @@ class AppController(tk.Tk):
 
         # Return full path.
         return Path(chosen)
+
+    def get_xtweak_paths(self):
+        """Open a file finder window to select a xtweak file"""
+        paths = filedialog.askopenfilenames(
+            parent=self, title="Open .xtweak files",
+            filetypes=[("XTweak files", "*.xtweak"), ("All files", "*.*")]
+        )
+
+        return list(paths) if paths else None
 
     def get_config(self, config):
         with open(self.CONFIG_PATH, "r") as f:

@@ -6,23 +6,14 @@ from utils.mask import Mask
 
 
 class Variable:
-    """
-    A number that is generated according to CRNG function then pasted over different masks given.
-    """
+    """Represents an unknown number waiting to be filled by context values."""
 
     def __init__(
             self,
             variable_name: str,
             masks: Optional[list[Mask]] = None
     ) -> None:
-        """
-        Initialize a new Variable instance.
-
-        Args:
-            variable_name (str): A reference name for the variable in ResLang.
-            masks (Optional[list[Mask]]): A list of Mask objects specifying where numbers can be placed on the image.
-                If not provided, defaults to an empty list.
-        """
+        """Initialize a new Variable instance."""
 
         # Private parameter attributes
         self._variable_name: str = variable_name
@@ -36,7 +27,7 @@ class Variable:
 
     @variable_name.setter
     def variable_name(self, variable_name):
-        self.variable_name = variable_name
+        self._variable_name = variable_name
 
     @property
     def masks(self):

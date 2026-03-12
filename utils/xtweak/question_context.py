@@ -1,50 +1,127 @@
-from typing import Dict
+from typing import Dict, Union
+
+Number = Union[int, float]
+
+class VarRef:
+    __slots__ = ("_ctx", "_name", "_store")
+
+    def __init__(self, ctx, name: str, store: str = "_variables"):
+        self._ctx = ctx
+        self._name = name
+        self._store = store
+
+    @property
+    def value(self):
+        return getattr(self._ctx, self._store)[self._name]
+
+    def set(self, new):
+        getattr(self._ctx, self._store)[self._name] = new
+        return self
+
+    # numeric protocol: allow use in arithmetic and f-strings
+    def __float__(self):
+        return float(self.value)
+
+    def __int__(self):
+        return int(self.value)
+
+    def __repr__(self):
+        return repr(self.value)
+
+    def __str__(self):
+        return str(self.value)
+
+    # Binary ops.
+    def __add__(self, other):
+        return self.value + (other.value if isinstance(other, VarRef) else other)
+
+    def __radd__(self, other):
+        return (other.value if isinstance(other, VarRef) else other) + self.value
+
+    def __sub__(self, other):
+        return self.value - (other.value if isinstance(other, VarRef) else other)
+
+    def __rsub__(self, other):
+        return (other.value if isinstance(other, VarRef) else other) - self.value
+
+    def __mul__(self, other):
+        return self.value * (other.value if isinstance(other, VarRef) else other)
+
+    def __rmul__(self, other):
+        return (other.value if isinstance(other, VarRef) else other) * self.value
+
+    def __truediv__(self, other):
+        return self.value / (other.value if isinstance(other, VarRef) else other)
+
+    def __rtruediv__(self, other):
+        return (other.value if isinstance(other, VarRef) else other) / self.value
+
+    # In-place ops.
+    def __iadd__(self, other):
+        new = self.value + (other.value if isinstance(other, VarRef) else other)
+        self.set(new)
+        return self
+
+    def __isub__(self, other):
+        new = self.value - (other.value if isinstance(other, VarRef) else other)
+        self.set(new)
+        return self
+
+    def __imul__(self, other):
+        new = self.value * (other.value if isinstance(other, VarRef) else other)
+        self.set(new)
+        return self
+
+    def __itruediv__(self, other):
+        new = self.value / (other.value if isinstance(other, VarRef) else other)
+        self.set(new)
+        return self
+
+    # Comparisons
+    def __eq__(self, other):
+        return self.value == (other.value if isinstance(other, VarRef) else other)
+
+    def __lt__(self, other):
+        return self.value < (other.value if isinstance(other, VarRef) else other)
+
+    def __le__(self, other):
+        return self.value <= (other.value if isinstance(other, VarRef) else other)
 
 class QuestionContext:
-    """Interface the CRNG file with xTweaks"""
+    """Interface the CRNG file with xTweaks."""
     def __init__(self):
-        self._variables = {}
-        self._solutions = {}
+        self._variables: Dict[str, Number] = {}
+        self._solutions: Dict[str, Number] = {}
         self._workings = []
-
-        self._question_text = ()
+        self._question_text = ''
 
     @property
     def variables(self) -> Dict:
-        """Returns a dictionary of variables"""
         return self._variables
 
     @property
     def solutions(self) -> Dict:
-        """Returns a dictionary of solutions"""
         return self._solutions
 
     @property
     def workings(self):
-        """Yields a list of workings"""
-        for working in self._workings:
-            yield working
+        return self._workings
 
     @property
     def question_text(self):
-        """Returns text to display under the question"""
         return self._question_text
-
-    def variable(self, name: str, value: int or float) -> str:
-        """Create a new variable and return an identifier"""
-        self._variables[name] = value
-        return name
-
-    def solution(self, name: str, value: int or float) -> str:
-        """Create a new solution and return an identifier"""
-        self._solutions[name] = value
-        return name
-
-    def output_workings(self, workings: str) -> None:
-        """Print out a new line of working"""
-        self._workings.append(workings)
 
     @question_text.setter
     def question_text(self, text: str):
-        """Optional text to display under the question"""
         self._question_text = text
+
+    def variable(self, name, value):
+        self._variables[name] = value
+        return VarRef(self, name, "_variables")
+
+    def solution(self, name, value):
+        self._solutions[name] = value
+        return VarRef(self, name, "_solutions")
+
+    def output_workings(self, workings: str) -> None:
+        self._workings.append(workings)

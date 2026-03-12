@@ -1,6 +1,6 @@
 # Standard library imports
 import io
-from typing import Optional, TypedDict
+from typing import Optional, TypedDict, Callable
 
 # Third-party imports
 import tkinter as tk
@@ -28,14 +28,6 @@ class QuestionEditorCanvas(ImageCanvas):
             width: int,
             height: int
     ) -> None:
-        """
-        Initialize the QuestionCanvas widgets.
-
-        Args:
-            parent (tk.Widget): The parent widget in which the canvas will be embedded.
-            controller (tk.Tk): Root app controller.
-            placeholder_image (bytes): Binary data for the image to be displayed.
-        """
         self._last_click: Optional[tuple[int, int]] = None  # Stores each first click
         self._lasso_ids: Optional[LassoIds] = {
             'rect_id': None,
@@ -65,7 +57,7 @@ class QuestionEditorCanvas(ImageCanvas):
         if not self.parent.question_image_imported:
             return
 
-        # If this is the first click (no existing `_last_click`)
+        # If this is the first click (no `_last_click`)
         if self._last_click is None:
             # Create dashed rectangle at (event.x, event.y)
             self._lasso_ids['rect_id'] = self.create_rectangle(
@@ -96,10 +88,6 @@ class QuestionEditorCanvas(ImageCanvas):
                 outline='blue'
             )
 
-            # DEBUG
-            print(f'old dimensions: {self.width}, {self.height}')
-            print(f'old rect: {self._last_click[0]}, {self._last_click[1]}, {event.x}, {event.y}')
-
             # Pass mask up to page
             self.parent.on_second_click(mask)
 
@@ -109,9 +97,7 @@ class QuestionEditorCanvas(ImageCanvas):
             self._last_click = None
 
     def _handle_lasso(self, event) -> None:
-        """
-        Update the dashed lasso rectangle as the mouse moves.
-        """
+        """Update the dashed lasso rectangle as the mouse moves."""
 
         if self._last_click is None:    # Guard against race conditions
             return
@@ -132,3 +118,99 @@ class QuestionEditorCanvas(ImageCanvas):
         """
         self.mouse_x.set(f'X: {event.x}')
         self.mouse_y.set(f'Y: {event.y}')
+
+class ArrowStepper(tk.Frame):
+    def __init__(
+        self,
+        parent,
+        step: Callable[[], None],
+        max_pages: int
+    ) -> None:
+        super().__init__(parent)
+        self._step = step
+
+        # internal state (use underscore to indicate "private")
+        try:
+            self._max_pages = max(1, int(max_pages))
+        except Exception:
+            self._max_pages = 1
+        self._page = 1
+
+        # Create buttons and middle display
+        self.btn_left = tk.Button(self, text="◀", width=3, command=self._on_left)
+        self.lbl_page = tk.Label(self, text=f"{self._page}/{self._max_pages}", width=8, anchor="center")
+        self.btn_right = tk.Button(self, text="▶", width=3, command=self._on_right)
+
+        # Layout: left, middle, right
+        self.btn_left.pack(side=tk.LEFT, padx=(0, 4))
+        self.lbl_page.pack(side=tk.LEFT)
+        self.btn_right.pack(side=tk.LEFT, padx=(4, 0))
+
+        # Keyboard bindings (global) for convenience
+        self.bind_all("<Left>", lambda e: self._on_left())
+        self.bind_all("<Right>", lambda e: self._on_right())
+
+        # initial display update
+        self._update_display()
+
+    def _update_display(self) -> None:
+        """Refresh the middle label and enable/disable buttons as appropriate."""
+        # Clamp page into valid range
+        if self._page < 1:
+            self._page = 1
+        if self._max_pages < 1:
+            self._max_pages = 1
+        if self._page > self._max_pages:
+            self._page = self._max_pages
+
+        # Update label
+        try:
+            self.lbl_page.config(text=f"{self._page}/{self._max_pages}")
+        except Exception:
+            pass
+
+        # Disable/enable buttons at bounds for clearer UX
+        try:
+            self.btn_left.config(state=tk.NORMAL if self._page > 1 else tk.DISABLED)
+            self.btn_right.config(state=tk.NORMAL if self._page < self._max_pages else tk.DISABLED)
+        except Exception:
+            pass
+
+    def _on_left(self) -> None:
+        if self._page > 1:
+            self._page -= 1
+            self._update_display()
+            try:
+                self._step()
+            except Exception:
+                pass
+
+    def _on_right(self) -> None:
+        if self._page < self._max_pages:
+            self._page += 1
+            self._update_display()
+            try:
+                self._step()
+            except Exception:
+                pass
+
+    # Public helpers so external code can update max_pages or set page directly
+    def set_max_pages(self, max_pages: int) -> None:
+        """Update max_pages from outside and refresh the display (will clamp page if needed)."""
+        try:
+            self._max_pages = max(1, int(max_pages))
+        except Exception:
+            self._max_pages = 1
+        self._update_display()
+
+    def set_page(self, page: int) -> None:
+        """Set the current page from outside and refresh the display."""
+        try:
+            self._page = int(page)
+        except Exception:
+            self._page = 1
+        self._update_display()
+
+    def get_page(self) -> int:
+        """Return the current page number."""
+        return self._page

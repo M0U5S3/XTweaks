@@ -18,9 +18,9 @@ def question(fn):
         )
 
     @wraps(fn)
-    def wrapper(*args, **kwargs):
+    def wrapper():
         ctx = QuestionContext()
-        result = fn(ctx, *args, **kwargs)
+        result = fn(ctx)
 
         # Accept functions that don't return but normalize the output.
         if isinstance(result, QuestionContext):

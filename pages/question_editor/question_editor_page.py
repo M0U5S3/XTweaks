@@ -3,11 +3,12 @@
 # Third-party imports
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import Callable, Optional
 
 # Local application imports
 from pages.question_editor.create_variable_window import CreateVariableWindow
 from pages.question_editor.question_editor_widgets import QuestionEditorCanvas
+from pages.question_editor.export_question_window import CreateQuestionWindow
+
 from utils.mask import Mask
 from utils.variable import Variable
 from utils.app_logging import LogLevel
@@ -19,7 +20,7 @@ from utils.question import Question
 class CRNGStatusLabel(ttk.Label):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
-        self._parent = parent
+        self.parent = parent
         self.configure(text="❗ You need to import a CRNG file ❗", foreground="red")
         self.crng_imported = False
 
@@ -56,8 +57,8 @@ class QuestionEditorPage(tk.Frame):
         self.question_canvas = QuestionEditorCanvas(
             self,
             controller,
-            int(self.controller.screen_width * 0.4),
-            int(self.controller.screen_height * 0.2)
+            1200,
+            600
         )
 
         # -- Status & Coordinates --
@@ -134,21 +135,25 @@ class QuestionEditorPage(tk.Frame):
         )
 
     def _import_image(self):
-        # Open file explorer
+        # Open file explorer.
         file_path = filedialog.askopenfilename(
             title="Select an Image",
             filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp")]
         )
 
         if file_path:
+            # Set and render the question image.
             with open(file_path, "rb") as f:
                 self.question_canvas.question_image_binary = f.read()
+            # Set the import flag to True.
             self.question_image_imported = True
 
     def _assign_crng_name(self):
+        # Connect CRNG path to the question.
         self.crng_name = self.controller.get_crng_path().name   # Open file finder.
-        self.controller.log(LogLevel.INFO, f"CRNG function successfully imported")
-        self.crng_status.mark_success()
+        if self.crng_name:
+            self.controller.log(LogLevel.INFO, f"CRNG function successfully imported")
+            self.crng_status.mark_success()
 
     def _export_question(self):
         self.controller.log(LogLevel.INFO, "Attempting an export...")
@@ -161,37 +166,24 @@ class QuestionEditorPage(tk.Frame):
             self.controller.log(LogLevel.WARN, "CRNG not imported.")
             return
 
-        # todo check that all variables have a link to CRNG.
-        # todo check solutions exist
+        export_window = CreateQuestionWindow(self, self.controller)
+        result = export_window.fetch_result()
 
-        # Confirm export
-        # todo change to be a window with inputs: difficulty, exam board, calculator allowed and marks
-        calculator_allowed = True # todo all temporary
-        difficulty = 'Hard'
-        question_number = 7
-        exam_board = 'AQA'
-        year = 2020
-        month = 5
-
-        if messagebox.askyesno(
-                "Confirm Export",
-                "Are you ready to export this question?"
-        ):
-            self.controller.log(LogLevel.INFO, "Question export confirmed.")
-
+        if result:
             q = Question(
                 self.crng_name,
                 self.question_canvas.question_image_binary,
                 self.variables,
-                calculator_allowed,
-                difficulty,
-                question_number = question_number,
-                exam_board = exam_board,
-                year = year,
-                month = month
+                result["calculator_allowed"],
+                result["difficulty"],
+                question_number = result["question_number"],
+                exam_board = result["exam_board"],
+                year = result["year"],
+                month = result["month"]
             )
 
             q.export()
 
-        else:
-            self.controller.log(LogLevel.INFO, "Question export cancelled.")
+            self.controller.log(LogLevel.INFO, "Question export completed.")
+
+        self.controller.log(LogLevel.INFO, "Question export cancelled.")

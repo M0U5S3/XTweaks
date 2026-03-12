@@ -14,14 +14,6 @@ def restricted_resize_image(
         - Scale image to match target height and compute corresponding width
         - If resulting width exceeds target width, clamp width and recalculate height
         - Resize the image using the final dimensions
-
-    Args:
-        image (Image.Image): The original PIL image.
-        target_width (int): The maximum allowed width.
-        target_height (int): The maximum allowed height.
-
-    Returns:
-        Image.Image: The resized image that fits within the target box.
     """
 
     # Original dimensions and aspect ratio

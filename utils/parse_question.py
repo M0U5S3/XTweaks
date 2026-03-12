@@ -9,10 +9,10 @@ import dill as pickle
 # Local application imports
 from utils.app_logging import LogLevel
 from utils.dependency_manager import DependencyManager
-from utils.question import Question
 
 class QuestionReader:
-    def __init__(self, controller):
+    def __init__(self, parent, controller):
+        self.parent = parent
         self.controller = controller
         self._question_paths = None
 
@@ -35,7 +35,7 @@ class QuestionReader:
             return
 
         # Find the question's path.
-        question_path = self._question_paths[question_number]
+        question_path = self.question_paths[question_number]
 
         # Load question data.
         with open(question_path, 'rb') as fh:
@@ -50,7 +50,7 @@ class QuestionReader:
 
     def get_crng_function(self, crng_path):
         required_modules = self._collect_required_modules(crng_path)
-        dependency_manager = DependencyManager(self, self.controller, required_modules)
+        dependency_manager = DependencyManager(self.parent, self.controller, required_modules)
 
         if not dependency_manager.handle_missing_dependencies():
             return

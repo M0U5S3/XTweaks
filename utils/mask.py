@@ -42,8 +42,11 @@ class Mask:
 
         self.active_rectangle = True
         self._text_id = None
-        self._text_font_family = style.get_fonts()['math']
-        self._text_font_weight: str = "normal"     # could be "bold"
+
+        # Avoid storing tkinter objects
+        font = style.get_fonts()['math']
+        self._text_font_family = font.cget("family")
+        self._text_font_weight = font.cget("weight")
 
     def delete_rectangle(self, parent_canvas):
         parent_canvas.delete(self.rectangle_id)
@@ -59,7 +62,6 @@ class Mask:
 
     def place_text(self, canvas, text: str, padding: float = 0.1) -> None:
         """Render some text so it fits inside the mask."""
-
 
         font = style.get_fonts()['math']
         # Remove previous text if any
@@ -90,15 +92,12 @@ class Mask:
         available_w = max(1, rect_w - 2 * pad_x)
         available_h = max(1, rect_h - 2 * pad_y)
 
-        # Font measurement helpers
+        # Helper to find actual text size given a font
         def text_size_for_font_size(fs: int) -> Tuple[int, int]:
-            f = tkfont.Font(family=font, size=fs)
-            width = f.measure(text)
-            height = f.metrics("linespace")
-            return width, height
+            f = tkfont.Font(family=self._text_font_family, size=fs, weight=self._text_font_weight)
+            return f.measure(text), f.metrics("linespace")
 
         # Binary search for maximum font size that fits in both dimensions
-        # Set reasonable bounds for font sizes
         max_possible = int(min(available_h, available_w) * 2) + 4  # very loose upper bound
         lo, hi = 1, max_possible
         best = 1
@@ -113,7 +112,7 @@ class Mask:
                 hi = mid - 1
 
         # Final font
-        final_font = tkfont.Font(family=font, size=best)
+        final_font = tkfont.Font(family=self._text_font_family, size=best, weight=self._text_font_weight)
 
         # Center the text in the rectangle
         cx = left + rect_w / 2

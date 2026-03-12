@@ -1,11 +1,11 @@
-
-
 # Third-party imports
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, Dict
+from typing import Callable, Dict, Optional
 
 # Local application imports
+from pages.question_editor.question_editor_widgets import ArrowStepper
+
 from utils.parse_question import QuestionReader
 from utils.style import style
 from utils.pages import Pages
@@ -26,18 +26,21 @@ class QuestionViewerPage(tk.Frame):
         self.controller = controller
 
         # Reader for question files.
-        self.reader = QuestionReader(self.controller)
+        self.reader = QuestionReader(self, self.controller)
 
         # Start with no question yet
-        # todo but will force this to be set on init instead
-        self.questions = None
         self.current_question = None
+        self.current_ctx = None
 
         # Dynamic answer boxes.
         self.solution_entries = {}
 
         # Record of which answers are wrong or right.
-        self.correct_solutions = {}
+        self.current_correct_solutions = {}
+
+        # Saved question states.
+        self.existing_context_states = {}
+        self.existing_solution_states = {}
 
         # === Style Setup ===
         fonts = style.get_fonts()
@@ -88,7 +91,7 @@ class QuestionViewerPage(tk.Frame):
         question_frame.grid_columnconfigure(0, weight=1)
 
         # --- Question Prompt ---
-        self.question_prompt = tk.StringVar(value='No Question Loaded')
+        self.question_prompt = tk.StringVar(value='No Alternative Prompt')
         question_prompt_label = ttk.Label(
             question_frame,
             textvariable=self.question_prompt,
@@ -102,19 +105,36 @@ class QuestionViewerPage(tk.Frame):
             question_frame,
             self.controller,
             width=700,
-            height=700  # todo expand to fit frame
+            height=700
         )
         self.question_canvas.grid(row=1, column=0, sticky="nsew", padx=4, pady=4)
 
-        # --- Question Information ---
+        # --- Question Information + ArrowStepper ---
+        question_frame.grid_columnconfigure(0, weight=1)
+        question_frame.grid_columnconfigure(1, weight=0)
+
         self.question_info = tk.StringVar(value='No Question Loaded')
+
+        # container frame so label and stepper sit on the same row
+        info_row = tk.Frame(question_frame)
+        info_row.grid(row=2, column=0, columnspan=2, sticky="nsew", padx=4, pady=(6, 6))
+
+        # left: question info label
         question_info_label = ttk.Label(
-            question_frame,
+            info_row,
             textvariable=self.question_info,
             font=fonts["default"],
             **label_style
         )
-        question_info_label.grid(row=2, column=0, sticky="sw", padx=4, pady=(6, 6))
+        question_info_label.pack(side=tk.LEFT, anchor="w", expand=True, fill="x")
+
+        # right: question selector
+        self.stepper = ArrowStepper(
+            info_row,
+            self.question_change,
+            1
+        )
+        self.stepper.pack(side=tk.RIGHT, anchor="e", padx=(8, 0))
 
         # --- Controls Frame ---
         controls_frame = tk.Frame(main_frame)
@@ -199,44 +219,62 @@ class QuestionViewerPage(tk.Frame):
         )
         load_button.pack(side="right", padx=20)
 
+    # Load new question when stepper is used.
+    def question_change(self):
+        self.load_question(self.stepper.get_page() - 1, hard_refresh=False)
+
     def check_solution(self):
+        self.existing_solution_states[self.current_question['question_data']] = []
+
         # Cycle through variable names and correct answers.
         for name, solution in self.current_ctx.solutions.items():
             entered = self.solution_entries[name][1].get().strip()
             expected = str(solution)
             is_correct = entered == expected
 
-            self.correct_solutions[name] = is_correct
+            self.current_correct_solutions[name] = is_correct
 
             # Update answer feedback.
             color = 'green' if is_correct else 'red'
             self.solution_entries[name][2].config(fg=color)
 
+            self.existing_solution_states[self.current_question['question_data']].append(entered)
+
         # Show the workings to the student.
         self.show_workings()
 
+    def restore_solutions(self):
+        """Populate solution entry widgets from stored history for the current question."""
+        stored_solutions = self.existing_solution_states[(self.current_question['question_data'])]
+
+        for name, value in zip(self.current_ctx.solutions, stored_solutions):
+            entry_var = self.solution_entries[name][1]
+            entry_var.set(value)
+
+        self.check_solution()
+
     def show_workings(self):
+        self.workings_text.delete("1.0", tk.END)
         # Output the workings line-by-line.
         for line in self.current_ctx.workings:
             self.workings_text.insert(tk.END, f"{line}\n")
 
     def import_questions(self):
-        # todo add database call.
-        # todo force an import before page opens.
-        self.reader.question_paths = [
-            'C:/Users/dariu/Downloads/AQA_7_2020_5.xtweak'
-        ]
-        # self.controller.open_questiondb or something return a list of paths. Only ".xtweak" files.
+        # Reset the reader and GUI.
+        self.reset()
 
-        # Save every selected question to an attribute in order of the list of paths.
-        self.questions: list[Dict[str, Question|Callable[[], QuestionContext]],...] = self.reader.all_questions
+        # Input paths to questions to the reader.
+        self.reader.question_paths = self.controller.get_xtweak_paths()
+
+        # Update the stepper widget to fit the amount of questions.
+        self.stepper.set_max_pages(len(self.reader.all_questions))
 
         # Load and generate the first question upon import
         self.load_question(0)
 
-    def load_question(self, question_number):
+    def load_question(self, question_number, hard_refresh=True):
         # Set the current question we're working on and seperate the question object first.
-        self.current_question = self.reader.get_question(question_number)
+        self.current_question = self.reader.all_questions[question_number]
         question_data = self.current_question['question_data']
 
         # Render the image.
@@ -255,11 +293,19 @@ class QuestionViewerPage(tk.Frame):
                                f'Calculator is{' ' if question_data.calculator_allowed else ' not '}allowed')
 
         # Generate context and apply changes
-        self.generate_context()
+        self.generate_context(hard_refresh=hard_refresh)
 
-    def generate_context(self):
-        # Create a ctx instance
-        self.current_ctx = self.current_question['crng_function']()
+    def generate_context(self, hard_refresh=True):
+        # If this is not a hard refresh use the pre-existing context instead.
+        if self.current_question['question_data'] in self.existing_context_states and not hard_refresh:
+            self.current_ctx = self.existing_context_states[self.current_question['question_data']]
+
+        else:
+            # Create a ctx instance
+            self.current_ctx = self.current_question['crng_function']()
+
+            # Add or update the context in the dictionary
+            self.existing_context_states[self.current_question['question_data']] = self.current_ctx
 
         # Load dynamic question prompt
         self.question_prompt.set(self.current_ctx.question_text)
@@ -270,8 +316,14 @@ class QuestionViewerPage(tk.Frame):
         # Place the new variables over old ones in the image
         self.place_masks()
 
-        print(self.current_ctx.solutions)
-        print(self.current_ctx.variables)  # DEBUG
+        self.workings_text.delete("1.0", tk.END)
+
+        if self.current_question['question_data'] in self.existing_solution_states:
+            if hard_refresh:
+                self.existing_solution_states.pop(self.current_question['question_data'])
+
+            else:
+                self.restore_solutions()
 
     def configure_solutions_input(self):
         fonts = style.get_fonts()
@@ -309,4 +361,17 @@ class QuestionViewerPage(tk.Frame):
         self.solution_entries = {}
 
         # Reset the solution checks
-        self.correct_solutions = {}
+        self.current_correct_solutions = {}
+
+    def reset(self):
+        self.initialize_solutions()
+
+        self.workings_text.delete("1.0", tk.END)
+
+        # Start with no question yet.
+        self.current_question = None
+        self.current_ctx = None
+
+        # Saved question states.
+        self.existing_context_states = {}
+        self.existing_solution_states = {}

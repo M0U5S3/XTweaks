@@ -1,7 +1,6 @@
-from typing import Callable, Optional, Dict
+from typing import Optional, Dict
 import dill as pickle
 from pathlib import Path
-from utils.xtweak import QuestionContext
 from utils.variable import Variable
 
 
@@ -38,7 +37,7 @@ class Question:
         target = Path(directory) if directory else Path.home() / "Downloads"
         target.mkdir(parents=True, exist_ok=True)
 
-        # Build a descriptive filename.
+        # Build a filename.
         parts = [
             self.exam_board or "question",
             str(self.question_number) if self.question_number else None,
@@ -50,14 +49,14 @@ class Question:
         name = "_".join(p for p in parts if p)
         filename = f"{name}.xtweak"
 
-        # Avoid overwriting by appending a counter if needed
+        # Avoid overwriting by appending a counter if needed.
         file_path = target / filename
         counter = 1
         while file_path.exists():
             file_path = target / f"{name}_({counter}).xtweak"
             counter += 1
 
-        # Pickle-dump self
+        # Package self.
         with file_path.open("wb") as fh:
             pickle.dump(self, fh)
 

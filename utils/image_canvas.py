@@ -11,7 +11,7 @@ from utils.image_tools import restricted_resize_image
 from utils.app_logging import LogLevel
 
 class ImageCanvas(tk.Canvas):
-    """Canvas to hold image and handle events related to interacting with the image."""
+    """Canvas to hold an image"""
 
     def __init__(
             self,
@@ -21,15 +21,6 @@ class ImageCanvas(tk.Canvas):
             height: int,
             **kwargs
     ) -> None:
-        """
-        Initialize the QuestionCanvas widgets.
-
-        Args:
-            parent (tk.Widget): The parent widget in which the canvas will be embedded.
-            controller (tk.Tk): Root app controller.
-            placeholder_image (bytes): Binary data for the image to be displayed.
-        """
-
         # Parameter attributes
         self.parent = parent
         self.controller = controller
@@ -40,7 +31,7 @@ class ImageCanvas(tk.Canvas):
         self.width = width
         self.height = height
 
-        # Initialize the base tk.Canvas using the parent widgets and computed width/height
+        # Initialize the base tk.Canvas
         super().__init__(
             self.parent,
             width=width,
@@ -49,6 +40,8 @@ class ImageCanvas(tk.Canvas):
             highlightthickness=0,
             **kwargs
         )
+
+        self._question_image_binary = None
 
         # Placeholder image
         self.tk_question_image = ImageTk.PhotoImage(
@@ -102,21 +95,9 @@ class ImageCanvas(tk.Canvas):
 
     @property
     def question_image_binary(self) -> bytes:
-        """
-        Getter for the question image binary data.
-
-        Returns:
-            bytes: The binary data of the question image.
-        """
         return self._question_image_binary
 
     @question_image_binary.setter
     def question_image_binary(self, binary: bytes) -> None:
-        """
-        Setter for the question image binary data. Automatically renders image.
-
-        Args:
-            binary (bytes): New binary data for the image.
-        """
         self._question_image_binary = binary
         self.render_image()

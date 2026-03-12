@@ -159,7 +159,7 @@ class CreateVariableWindow(tk.Toplevel):
                 f"Allowed: {self._allowed_variable_characters_pattern.pattern}."
             )
 
-        # If we reach here the name is valid
+        # Name is valid
         return
 
     def _update_feedback(self, name: str):
@@ -191,7 +191,7 @@ class CreateVariableWindow(tk.Toplevel):
 
         name = self.var_name_entry.get()
 
-        # Final validation via helper
+        # Final validation
         error = self._validate_name(name)
         if error:
             # Update feedback label and show consistent warning dialog

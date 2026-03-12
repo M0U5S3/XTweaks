@@ -20,7 +20,7 @@ class Home(tk.Frame):
         button_font = font.Font(family="Helvetica", size=12)
 
         # Title
-        title = tk.Label(self, text="Math Master Hub", font=title_font, bg="#f0f4f8", fg="#2c3e50")
+        title = tk.Label(self, text="XTweak Revision Tools", font=title_font, bg="#f0f4f8", fg="#2c3e50")
         title.pack(pady=(40, 20))
         # todo apply styles.py somehow maybe by default in controller
 
@@ -29,24 +29,11 @@ class Home(tk.Frame):
         subtitle.pack(pady=(0, 30))
 
         # Button style
-        button_style = {
-            "font": button_font,
-            "bg": "#3498db",
-            "fg": "white",
-            "activebackground": "#2980b9",
-            "activeforeground": "white",
-            "width": 20,
-            "height": 2,
-            "bd": 0,
-            "relief": "flat",
-            "cursor": "hand2"
-        }
+        button_style = style.get_button_style_home()
 
         # Buttons
         self.create_button("🧠 Question Tweaker", self.go_to_tweaker, **button_style)
         self.create_button("📡 Open Questions", self.go_to_viewer, **button_style)
-        self.create_button("🔗 Join Session", self.go_to_join, **button_style)
-        self.create_button("📘 Offline Mode", self.go_to_offline, **button_style)
 
     def create_button(self, text, command, **kwargs):
         btn = tk.Button(self, text=text, command=command, **kwargs)
@@ -59,9 +46,3 @@ class Home(tk.Frame):
 
     def go_to_viewer(self):
         self.controller.show_page(Pages.QUESTION_VIEWER)
-
-    def go_to_join(self):
-        pass
-
-    def go_to_offline(self):
-        pass
