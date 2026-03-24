@@ -30,11 +30,6 @@ class CreateQuestionWindow(tk.Toplevel):
         # Title
         self.title("Question metadata")
 
-        # Track whether the page is being closed intentionally (via valid progression)
-        self._intentional_close = False  # Set True when user advances via Export
-        self.bind("<Destroy>", self._on_destruction)
-        self._direct_destroy = super().destroy
-
         # Result placeholder
         self.result: Optional[Dict[str, Any]] = None
 
@@ -74,7 +69,7 @@ class CreateQuestionWindow(tk.Toplevel):
         year_label = ttk.Label(self, text="Year:", font=fonts["default"], **label_style)
         self.var_year = tk.IntVar(value=self._current_year)
         self.ent_year = tk.Spinbox(self, from_=0, to=self._current_year, textvariable=self.var_year, width=10,
-                                   command=self._on_year_spinbox_change)
+                                   command=self._enforce_month_limit)
 
         month_label = ttk.Label(self, text="Month:", font=fonts["default"], **label_style)
         self.var_month = tk.IntVar(value=self._current_month)
@@ -86,7 +81,7 @@ class CreateQuestionWindow(tk.Toplevel):
         # -- Buttons --
         button_frame = tk.Frame(self, **frame_style)
         self.btn_export = tk.Button(button_frame, text="Export", command=self._on_export, **button_style)
-        self.btn_cancel = tk.Button(button_frame, text="Cancel", command=self._on_cancel, **button_style)
+        self.btn_cancel = tk.Button(button_frame, text="Cancel", command=self.destroy, **button_style)
 
         # === Pack Widgets ===
 
@@ -123,9 +118,6 @@ class CreateQuestionWindow(tk.Toplevel):
         self.btn_cancel.pack(side=tk.LEFT, padx=5)
         self.btn_export.pack(side=tk.LEFT, padx=5)
 
-        # Bindings
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
-
         # When the year changes check the month is still valid
         self.var_year.trace_add("write", lambda *_: self._enforce_month_limit())
 
@@ -134,38 +126,23 @@ class CreateQuestionWindow(tk.Toplevel):
 
         self.controller.log(LogLevel.DEBUG, "Opened question metadata window")
 
-    def _on_year_spinbox_change(self):
-        try:
-            _ = int(self.var_year.get())
-        except Exception:
-            pass
-        self._enforce_month_limit()
-
     def _enforce_month_limit(self):
-        """Clamp month max to current month if year == current year."""
-        try:
-            year = int(self.var_year.get())
-        except Exception:
-            return
+        # If this year is the year selected, make the maximum month the current month.
+        year = int(self.var_year.get())
+        max_month = self._current_month if year == self._current_year else 12
+        self.ent_month.config(to=max_month)
 
-        max_month = self._current_month if year >= self._current_year else 12
-
-        try:
-            self.ent_month.config(to=max_month)
-            if int(self.var_month.get()) > max_month:
-                self.var_month.set(max_month)
-        except Exception:
-            pass
+        # Clamp the month down if the user already selected an out of bound option.
+        if int(self.var_month.get()) > max_month:
+            self.var_month.set(max_month)
 
     def _validate(self) -> Optional[str]:
-        """Validate inputs. Return None if OK otherwise error message string."""
-        # optional
         qnum = self.ent_question_number.get().strip()
         if qnum:
             try:
                 qn = int(qnum)
-                if qn < 0:
-                    return "Question number must be zero or positive."
+                if qn < 1:
+                    return "Question number must be one or positive."
             except ValueError:
                 return "Question number must be an integer."
 
@@ -206,65 +183,23 @@ class CreateQuestionWindow(tk.Toplevel):
         return None
 
     def _on_export(self):
-        """Validate, set result and then close intentionally."""
         err = self._validate()
         if err:
-            self.feedback_label.config(text=err, fg="red")
             messagebox.showerror("Validation error", err, parent=self)
+            self.feedback_label.config(text=err, fg="red")
             return
-
-        # question number (optional)
-        qnum_raw = self.ent_question_number.get().strip()
-        qnum = int(qnum_raw) if qnum_raw != "" else None
-
-        # exam board (optional)
-        exam_raw = self.ent_exam_board.get().strip()
-        exam_board = exam_raw if exam_raw != "" else None
-
-        # year (optional)
-        try:
-            year_val = self.var_year.get()
-            year = int(year_val) if year_val != "" else None
-        except Exception:
-            year = None
-
-        # month (optional)
-        try:
-            month_val = self.var_month.get()
-            month = int(month_val) if month_val != "" else None
-        except Exception:
-            month = None
 
         self.result = {
             "calculator_allowed": bool(self.var_calculator_allowed.get()),
             "difficulty": self.ent_difficulty.get(),
-            "question_number": qnum,
-            "exam_board": exam_board,
-            "year": year,
-            "month": month,
+            "question_number": int(self.ent_question_number.get()) if self.ent_question_number.get().strip() else None,
+            "exam_board": self.ent_exam_board.get().strip() or None,
+            "year": int(self.var_year.get()),
+            "month": int(self.var_month.get()),
         }
-        self.destroy(intentional=True)
-
-    def _on_cancel(self):
-        """User pressed Cancel button."""
-        self.result = None
         self.destroy()
 
-    def _on_close(self):
-        """User closed the window via the window manager (X)."""
-        self.result = None
-        self.destroy(intentional=False)
-
-    def destroy(self, intentional: bool = False):
-        """Override destroy to record whether the close was intentional."""
-        self._intentional_close = intentional
-        try:
-            self.controller.log(LogLevel.DEBUG, "Window closure detected")
-        except Exception:
-            pass
-        self._direct_destroy()
-
-    def _on_destruction(self, event):
-        """Called when the window is destroyed."""
-        if not self._intentional_close:
-            pass
+    def fetch_result(self):
+        """Wait for window closure"""
+        self.wait_window(self)
+        return self.result

@@ -2,9 +2,6 @@ import inspect
 from functools import wraps
 from .question_context import QuestionContext
 
-# todo import packages in wrapper?
-# todo add auto complete ability without needing typing
-
 def question(fn):
     # Enforce exactly one parameter (ctx)
     sig = inspect.signature(fn)

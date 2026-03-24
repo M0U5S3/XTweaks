@@ -129,11 +129,7 @@ class ArrowStepper(tk.Frame):
         super().__init__(parent)
         self._step = step
 
-        # internal state (use underscore to indicate "private")
-        try:
-            self._max_pages = max(1, int(max_pages))
-        except Exception:
-            self._max_pages = 1
+        self._max_pages = max(1, int(max_pages))
         self._page = 1
 
         # Create buttons and middle display
@@ -155,7 +151,7 @@ class ArrowStepper(tk.Frame):
 
     def _update_display(self) -> None:
         """Refresh the middle label and enable/disable buttons as appropriate."""
-        # Clamp page into valid range
+        # Clamp page into valid range.
         if self._page < 1:
             self._page = 1
         if self._max_pages < 1:
@@ -163,52 +159,33 @@ class ArrowStepper(tk.Frame):
         if self._page > self._max_pages:
             self._page = self._max_pages
 
-        # Update label
-        try:
-            self.lbl_page.config(text=f"{self._page}/{self._max_pages}")
-        except Exception:
-            pass
+        # Update label.
+        self.lbl_page.config(text=f"{self._page}/{self._max_pages}")
 
-        # Disable/enable buttons at bounds for clearer UX
-        try:
-            self.btn_left.config(state=tk.NORMAL if self._page > 1 else tk.DISABLED)
-            self.btn_right.config(state=tk.NORMAL if self._page < self._max_pages else tk.DISABLED)
-        except Exception:
-            pass
+        # Disable/enable buttons at bounds for clearer UX.
+        self.btn_left.config(state=tk.NORMAL if self._page > 1 else tk.DISABLED)
+        self.btn_right.config(state=tk.NORMAL if self._page < self._max_pages else tk.DISABLED)
 
     def _on_left(self) -> None:
         if self._page > 1:
             self._page -= 1
             self._update_display()
-            try:
-                self._step()
-            except Exception:
-                pass
+            self._step()
 
     def _on_right(self) -> None:
         if self._page < self._max_pages:
             self._page += 1
             self._update_display()
-            try:
-                self._step()
-            except Exception:
-                pass
+            self._step()
 
-    # Public helpers so external code can update max_pages or set page directly
     def set_max_pages(self, max_pages: int) -> None:
-        """Update max_pages from outside and refresh the display (will clamp page if needed)."""
-        try:
-            self._max_pages = max(1, int(max_pages))
-        except Exception:
-            self._max_pages = 1
+        """Update max_pages and refresh the display"""
+        self._max_pages = max(1, int(max_pages))
         self._update_display()
 
     def set_page(self, page: int) -> None:
-        """Set the current page from outside and refresh the display."""
-        try:
-            self._page = int(page)
-        except Exception:
-            self._page = 1
+        """Set the current page and refresh the display."""
+        self._page = int(page)
         self._update_display()
 
     def get_page(self) -> int:

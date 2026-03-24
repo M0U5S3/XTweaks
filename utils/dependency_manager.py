@@ -17,6 +17,7 @@ class DependencyManager:
         self.parent = parent
         self.controller = controller
         self.required_modules = required_modules
+        self._cancel_install = False
 
     def handle_missing_dependencies(self):
         # Separate the dependencies that aren't installed
@@ -38,18 +39,11 @@ class DependencyManager:
             # Show progress window.
             self._show_progress_popup(len(missing_modules))
 
-            def disable_cancel_button():
-                try:
-                    if hasattr(self, "_cancel_button") and self._cancel_button.winfo_exists():
-                        self._cancel_button.config(state="disabled")
-                except Exception:   # Disabling the button twice isnt important enough to prevent roll back
-                    self.controller.log(LogLevel.ERROR, 'An error was raised when trying to disable cancel button.')
-
             # Define the thread.
             def do_installs():
                 try:
                     for idx, mod in enumerate(missing_modules, start=1):
-                        # Check if a cancel has happened before downloading next module
+                        # Check if a cancel has happened before downloading next module.
                         if self._cancel_install:
                             raise RuntimeError("Installation cancelled by user.")
 
@@ -67,6 +61,10 @@ class DependencyManager:
                         # Schedule progress indicator update
                         self.controller.after(0, self._update_progress_label, idx, len(missing_modules))
 
+                    # Check if a cancel has happened after downloading everything.
+                    if self._cancel_install:
+                        raise RuntimeError("Installation cancelled by user.")
+
                 # In the event of ANY error, we must roll back previous installs
                 except Exception as e:
                     # Use an if statement instead of declaring mod before try
@@ -77,7 +75,7 @@ class DependencyManager:
                     )
 
                     # Iterate through each module already installed and uninstall them.
-                    for installed in installed_modules:
+                    for installed in installed_modules[::-1]:
                         try:
                             # Attempt to uninstall module
                             subprocess.check_call(
@@ -93,26 +91,9 @@ class DependencyManager:
 
                 # Schedule to close progress window.
                 finally:
-                    # Check that the popup was even created yet.
-                    if hasattr(self, "_progress_popup"):
-                        self.controller.after(0, self._progress_popup.destroy)
+                    self.controller.after(0, self._progress_popup.destroy)
 
-            # Configure cancel button to disable
-            # once pressed to prevent multiple triggers.
-
-            # Check the cancel button exists.
-            if hasattr(self, "_cancel_button") and self._cancel_button.winfo_exists():
-                self._cancel_button.config(
-                    command=lambda: [
-                        setattr(self, "_cancel_install", True),  # Set cancel flag to True.
-                        disable_cancel_button()  # Disable the button from being double pressed
-                    ]
-                )
-
-            # todo below
-            # daemon for now but this isn't robust: if the interpreter crashes
-            # the thread does too. This means roll back and error handling never happens.
-            # We can either make it non daemon or self fixing on restart.
+            # Create and start installer daemon.
             install_thread = threading.Thread(target=do_installs, daemon=True)
             install_thread.start()
 
@@ -135,7 +116,6 @@ class DependencyManager:
         # Reset cancelled flag
         self._cancel_install = False
 
-        # todo self or self.controller
         # Create window.
         self._progress_popup = tk.Toplevel(self.parent)
 
@@ -156,12 +136,10 @@ class DependencyManager:
         self._progress_popup.protocol("WM_DELETE_WINDOW", self._cancel_dependency_install)
 
     def _update_progress_label(self, current, total):
-        # If progress label exists yet.
-        if hasattr(self, "_progress_label"):
-            self._progress_label.config(text=f"{current} / {total}")
+        self._progress_label.config(text=f"{current} / {total}")
 
-            # Move the UI update to the front of the event queue
-            self._progress_label.update_idletasks()
+        # Move the UI update to the front of the event queue
+        self._progress_label.update_idletasks()
 
     def _cancel_dependency_install(self):
         self._cancel_install = True

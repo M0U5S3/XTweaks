@@ -66,7 +66,6 @@ class QuestionReader:
         self.controller.log(LogLevel.INFO, f"CRNG function successfully imported")
         return crng_function
 
-
     def _collect_required_modules(self, crng_path):
         # Read file as raw text
         try:
