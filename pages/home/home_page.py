@@ -17,12 +17,10 @@ class Home(tk.Frame):
 
         # Fonts
         title_font = font.Font(family="Helvetica", size=24, weight="bold")
-        button_font = font.Font(family="Helvetica", size=12)
 
         # Title
         title = tk.Label(self, text="XTweak Revision Tools", font=title_font, bg="#f0f4f8", fg="#2c3e50")
         title.pack(pady=(40, 20))
-        # todo apply styles.py somehow maybe by default in controller
 
         subtitle = tk.Label(self, text="Choose your path to mathematical greatness:",
                             font=("Helvetica", 14), bg="#f0f4f8", fg="#34495e")
@@ -39,10 +37,8 @@ class Home(tk.Frame):
         btn = tk.Button(self, text=text, command=command, **kwargs)
         btn.pack(pady=10)
 
-    # Navigation methods
     def go_to_tweaker(self):
         self.controller.show_page(Pages.QUESTION_EDITOR)
-        # todo all of below
 
     def go_to_viewer(self):
         self.controller.show_page(Pages.QUESTION_VIEWER)
