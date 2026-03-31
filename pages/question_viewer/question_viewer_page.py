@@ -224,7 +224,8 @@ class QuestionViewerPage(tk.Frame):
         self.load_question(self.stepper.get_page() - 1, hard_refresh=False)
 
     def check_solution(self):
-        self.existing_solution_states[self.current_question['question_data']] = []
+        id = self.current_question['question_data'].id
+        self.existing_solution_states[id] = []
 
         # Cycle through variable names and correct answers.
         for name, solution in self.current_ctx.solutions.items():
@@ -238,14 +239,14 @@ class QuestionViewerPage(tk.Frame):
             color = 'green' if is_correct else 'red'
             self.solution_entries[name][2].config(fg=color)
 
-            self.existing_solution_states[self.current_question['question_data']].append(entered)
+            self.existing_solution_states[id].append(entered)
 
         # Show the workings to the student.
         self.show_workings()
 
     def restore_solutions(self):
         """Populate solution entry widgets from stored history for the current question."""
-        stored_solutions = self.existing_solution_states[(self.current_question['question_data'])]
+        stored_solutions = self.existing_solution_states[self.current_question['question_data'].id]
 
         for name, value in zip(self.current_ctx.solutions, stored_solutions):
             entry_var = self.solution_entries[name][1]
@@ -297,15 +298,17 @@ class QuestionViewerPage(tk.Frame):
 
     def generate_context(self, hard_refresh=True):
         # If this is not a hard refresh use the pre-existing context instead.
-        if self.current_question['question_data'] in self.existing_context_states and not hard_refresh:
-            self.current_ctx = self.existing_context_states[self.current_question['question_data']]
+        id = self.current_question['question_data'].id
+
+        if id in self.existing_context_states and not hard_refresh:
+            self.current_ctx = self.existing_context_states[id]
 
         else:
             # Create a ctx instance
             self.current_ctx = self.current_question['crng_function']()
 
             # Add or update the context in the dictionary
-            self.existing_context_states[self.current_question['question_data']] = self.current_ctx
+            self.existing_context_states[id] = self.current_ctx
 
         # Load dynamic question prompt
         self.question_prompt.set(self.current_ctx.question_text)
@@ -318,9 +321,9 @@ class QuestionViewerPage(tk.Frame):
 
         self.workings_text.delete("1.0", tk.END)
 
-        if self.current_question['question_data'] in self.existing_solution_states:
+        if id in self.existing_solution_states:
             if hard_refresh:
-                self.existing_solution_states.pop(self.current_question['question_data'])
+                self.existing_solution_states.pop(id)
 
             else:
                 self.restore_solutions()

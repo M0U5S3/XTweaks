@@ -2,6 +2,7 @@ from typing import Optional, Dict
 import dill as pickle
 from pathlib import Path
 from utils.variable import Variable
+import random
 
 
 class Question:
@@ -15,7 +16,7 @@ class Question:
             question_number: Optional[int] = None,
             exam_board: Optional[str] = None,
             year: Optional[int] = None,
-            month: Optional[int] = None,
+            month: Optional[int] = None
     ):
         self.crng_name = crng_name
         self.image_binary = image_binary
@@ -26,6 +27,8 @@ class Question:
         self.exam_board = exam_board
         self.year = year
         self.month = month
+
+        self.id = hex(random.getrandbits(64))[2:]
 
     def export(self, directory: Optional[str] = None) -> str:
         """

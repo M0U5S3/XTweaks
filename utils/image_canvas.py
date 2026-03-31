@@ -62,6 +62,7 @@ class ImageCanvas(tk.Canvas):
             orig_question_image = Image.open(
                 io.BytesIO(self._question_image_binary)
             )
+            self.delete('all')
 
         except TypeError as e:
             # Not a bytes-like object
