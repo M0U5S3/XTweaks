@@ -2,9 +2,12 @@
 import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Dict, Optional
+import time
+import os
 
 # Local application imports
 from pages.question_editor.question_editor_widgets import ArrowStepper
+from utils.app_logging import LogLevel
 
 from utils.parse_question import QuestionReader
 from utils.style import style
@@ -31,6 +34,12 @@ class QuestionViewerPage(tk.Frame):
         # Start with no question yet
         self.current_question = None
         self.current_ctx = None
+
+        # Track correctly answered questions
+        self.correct_answers = {}
+
+        # Time how long to answer questions
+        self.start_time = 0
 
         # Dynamic answer boxes.
         self.solution_entries = {}
@@ -193,6 +202,15 @@ class QuestionViewerPage(tk.Frame):
         )
         gen_context_button.pack(side="left", padx=5)
 
+        # --- Export Results Button ---
+        exp_results_button = tk.Button(
+            buttons_row,
+            text="Export Results",
+            command=self.exp_results,
+            **button_style
+        )
+        exp_results_button.pack(side="left", padx=5)
+
         # --- Workings Title ---
         workings_label = tk.Label(controls_frame, text="Workings", font=fonts["subtitle"], **label_style)
         workings_label.pack(anchor="w", pady=(10, 2))
@@ -227,6 +245,8 @@ class QuestionViewerPage(tk.Frame):
         id = self.current_question['question_data'].id
         self.existing_solution_states[id] = []
 
+        all_correct = True
+
         # Cycle through variable names and correct answers.
         for name, solution in self.current_ctx.solutions.items():
             entered = self.solution_entries[name][1].get().strip()
@@ -240,6 +260,12 @@ class QuestionViewerPage(tk.Frame):
             self.solution_entries[name][2].config(fg=color)
 
             self.existing_solution_states[id].append(entered)
+
+            if not is_correct:
+                all_correct = False
+
+        # Mark question as either fully right or wrong
+        self.correct_answers[self.current_question['question_data'].id] = all_correct
 
         # Show the workings to the student.
         self.show_workings()
@@ -272,6 +298,9 @@ class QuestionViewerPage(tk.Frame):
 
         # Load and generate the first question upon import
         self.load_question(0)
+
+        # Start timer
+        self.start_time = time.time()
 
     def load_question(self, question_number, hard_refresh=True):
         # Set the current question we're working on and seperate the question object first.
@@ -324,9 +353,43 @@ class QuestionViewerPage(tk.Frame):
         if id in self.existing_solution_states:
             if hard_refresh:
                 self.existing_solution_states.pop(id)
+                self.correct_answers[id] = False
 
             else:
                 self.restore_solutions()
+
+    def exp_results(self):
+        total_questions_loaded = len(self.reader.question_paths)
+        total_correct = sum(self.correct_answers.values())
+        percentage_correct = round((total_correct / total_questions_loaded) * 100)
+
+        time_elapsed = (time.time() - self.start_time) / 60
+        avg_time = round(time_elapsed / total_questions_loaded)
+
+        contents = (
+            f"{total_correct}/{total_questions_loaded} Correct - {percentage_correct}%\n"
+            f"Total time taken: {round(time_elapsed)} minutes, "
+            f"Average time taken per question: {avg_time} minutes"
+        )
+
+        # --- Path to Downloads folder ---
+        downloads = os.path.join(os.path.expanduser("~"), "Downloads")
+
+        # --- Auto-incrementing filename ---
+        base = "results"
+        ext = ".txt"
+        counter = 1
+
+        while os.path.exists(os.path.join(downloads, f"{base}_{counter}{ext}")):
+            counter += 1
+
+        filename = os.path.join(downloads, f"{base}_{counter}{ext}")
+
+        # --- Write the file ---
+        with open(filename, "w") as f:
+            f.write(contents)
+
+        print(f"Saved results to {filename}")
 
     def configure_solutions_input(self):
         fonts = style.get_fonts()
@@ -378,3 +441,7 @@ class QuestionViewerPage(tk.Frame):
         # Saved question states.
         self.existing_context_states = {}
         self.existing_solution_states = {}
+
+        # Reset statistic trackers
+        self.correct_answers = {}
+        self.start_time = 0
